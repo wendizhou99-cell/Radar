@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [ develop, main, 'feature/**' ]
+  pull_request:
+    branches: [ develop, main ]
+
+jobs:
+  build-and-test:
+    name: Build and Test (${{ matrix.os }}, ${{ matrix.build_type }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        build_type: [Release]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache CMake build directory
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: ${{ runner.os }}-cmake-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-cmake-
+
+      - name: Setup dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build ccache clang-format clang-tidy
+
+      - name: Setup dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          # Windows runners normally include Visual Studio and CMake.
+          # Install optional tooling if needed (uncomment if required):
+          # choco install -y ninja
+          Write-Host "Windows runner ready"
+
+      - name: Check code formatting (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          # 检查代码格式是否符合 .clang-format 规范
+          find radar_mvp/src radar_mvp/include -name "*.cpp" -o -name "*.h" | xargs clang-format --dry-run --Werror || {
+            echo "❌ 代码格式不符合规范，请运行 'find radar_mvp/src radar_mvp/include -name \"*.cpp\" -o -name \"*.h\" | xargs clang-format -i' 修复"
+            exit 1
+          }
+
+      - name: Static analysis with clang-tidy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          # 运行静态分析（仅对主要源文件，避免第三方库）
+          find radar_mvp/src -name "*.cpp" | head -10 | xargs clang-tidy --config-file=.clang-tidy || {
+            echo "⚠️ 静态分析发现潜在问题，请检查上述输出"
+            exit 1
+          }
+
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }} -- -j
+
+      - name: Run tests
+        run: |
+          ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure
+
+      - name: Upload test results (JUnit format)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-output-${{ matrix.os }}
+          path: build/Testing
+
+# Optional: 后续可以扩展如下检查：
+# - clang-format 校验
+# - clang-tidy 静态检查
+# - code coverage (gcov/lcov, or Windows equivalents)
+# - 安全扫描 (依赖扫描/静态分析)

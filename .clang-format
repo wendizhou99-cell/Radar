@@ -1,0 +1,54 @@
+# .clang-format - 雷达项目代码格式化配置
+# 基于 Google 风格，针对 C++ 项目调整
+
+BasedOnStyle: Google
+Language: Cpp
+
+# 基本缩进和对齐
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+
+# 括号和空格
+SpaceBeforeParens: ControlStatements
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+SpaceAfterCStyleCast: false
+SpaceBeforeAssignmentOperators: true
+
+# 换行和格式
+BreakBeforeBraces: Attach
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+AlwaysBreakAfterReturnType: None
+
+# 命名空间
+NamespaceIndentation: None
+CompactNamespaces: false
+
+# 包含文件排序
+SortIncludes: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<.*\.h>'
+    Priority: 1
+  - Regex: '^<.*>'
+    Priority: 2
+  - Regex: '^".*"'
+    Priority: 3
+
+# 访问修饰符
+AccessModifierOffset: -2
+
+# 指针和引用对齐
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+# 其他格式选项
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignOperands: true
+BinPackArguments: true
+BinPackParameters: true
