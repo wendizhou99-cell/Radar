@@ -78,12 +78,39 @@ function Submit-RadarChanges {
     Write-Host "提交完成: $Type($Scope): $Message" -ForegroundColor Green
 }
 
+# 同步远程仓库
+function Sync-WithRemote {
+    $currentBranch = git branch --show-current
+    Write-Host "同步当前分支 '$currentBranch' 与远程仓库..." -ForegroundColor Yellow
+    git pull origin $currentBranch
+    git push origin $currentBranch
+    Write-Host "同步完成！" -ForegroundColor Green
+}
+
+# 推送所有分支
+function Push-AllBranches {
+    Write-Host "推送所有分支到远程仓库..." -ForegroundColor Yellow
+    git push --all origin
+    Write-Host "所有分支推送完成！" -ForegroundColor Green
+}
+
+# 查看远程仓库状态
+function Show-RemoteStatus {
+    Write-Host "=== 远程仓库状态 ===" -ForegroundColor Cyan
+    git remote -v
+    Write-Host "`n远程分支:" -ForegroundColor Yellow
+    git branch -r
+}
+
 # 别名设置
 Set-Alias -Name "radar-switch" -Value Switch-ToFeatureBranch
 Set-Alias -Name "radar-new" -Value New-FeatureBranch
 Set-Alias -Name "radar-merge" -Value Merge-FeatureToDevelop
 Set-Alias -Name "radar-status" -Value Show-ProjectBranches
 Set-Alias -Name "radar-commit" -Value Submit-RadarChanges
+Set-Alias -Name "radar-sync" -Value Sync-WithRemote
+Set-Alias -Name "radar-push-all" -Value Push-AllBranches
+Set-Alias -Name "radar-remote" -Value Show-RemoteStatus
 
 Write-Host "Radar项目Git管理脚本已加载！" -ForegroundColor Green
 Write-Host "可用命令:" -ForegroundColor Cyan
@@ -92,3 +119,6 @@ Write-Host "  radar-new <branch-name>     - 创建新功能分支" -ForegroundCo
 Write-Host "  radar-merge <branch-name>   - 合并功能分支" -ForegroundColor White
 Write-Host "  radar-status                - 显示项目状态" -ForegroundColor White
 Write-Host "  radar-commit                - 标准化提交" -ForegroundColor White
+Write-Host "  radar-sync                  - 同步当前分支与远程" -ForegroundColor White
+Write-Host "  radar-push-all              - 推送所有分支到远程" -ForegroundColor White
+Write-Host "  radar-remote                - 查看远程仓库状态" -ForegroundColor White
