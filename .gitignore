@@ -84,6 +84,9 @@ config/local_config.yaml
 data/test_data/large_files/
 third_party/downloads/
 
+# 私人文档 (不上传到团队仓库)
+docs_private/
+
 # 用户特定配置
 .vscode/settings.json
 .vscode/launch.json
