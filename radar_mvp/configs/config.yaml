@@ -1,0 +1,153 @@
+# Radar MVP 系统统一配置文件
+# 作者: Kelin
+# 版本: 1.0
+# 日期: 2025-09-11
+
+#==============================================================================
+# 系统全局配置
+#==============================================================================
+system:
+  name: "Radar MVP System"
+  version: "1.0.0"
+  log_level: "info"  # trace, debug, info, warn, error, critical
+  max_threads: 8
+
+  # 性能监控设置
+  performance:
+    enable_monitoring: true
+    statistics_interval_ms: 1000
+    memory_usage_threshold_mb: 512
+
+#==============================================================================
+# 数据接收模块配置
+#==============================================================================
+data_receiver:
+  # 模拟数据源设置（MVP阶段）
+  simulation:
+    enabled: true
+    data_rate_mbps: 100
+    packet_size_bytes: 4096
+    generation_interval_ms: 10
+
+  # 真实数据源设置（后续扩展）
+  hardware:
+    enabled: false
+    interface_type: "ethernet"
+    ip_address: "192.168.1.100"
+    port: 8080
+
+  # 缓冲区设置
+  buffer:
+    max_queue_size: 1000
+    overflow_policy: "drop_oldest"  # drop_oldest, drop_newest, block
+
+#==============================================================================
+# 数据处理模块配置
+#==============================================================================
+data_processor:
+  # 处理策略选择
+  strategy: "cpu_basic"  # cpu_basic, gpu_accelerated
+
+  # CPU处理配置
+  cpu:
+    worker_threads: 4
+    batch_size: 16
+    processing_timeout_ms: 100
+
+  # GPU处理配置（预留）
+  gpu:
+    device_id: 0
+    memory_pool_mb: 256
+    stream_count: 4
+    kernel_timeout_ms: 50
+
+#==============================================================================
+# 任务调度模块配置
+#==============================================================================
+task_scheduler:
+  # 线程池配置
+  thread_pool:
+    core_threads: 4
+    max_threads: 8
+    queue_capacity: 500
+    keep_alive_ms: 60000
+
+  # 调度策略
+  scheduling:
+    policy: "fifo"  # fifo, priority, round_robin
+    max_retry_count: 3
+    retry_delay_ms: 100
+
+#==============================================================================
+# 显示控制模块配置
+#==============================================================================
+display_controller:
+  # 输出格式设置
+  output:
+    format: "console"  # console, file, both
+    update_interval_ms: 500
+    show_statistics: true
+
+  # 控制台输出配置
+  console:
+    colored_output: true
+    max_lines: 100
+    timestamp_format: "%Y-%m-%d %H:%M:%S"
+
+  # 文件输出配置
+  file:
+    enabled: false
+    output_directory: "./output"
+    filename_pattern: "radar_output_%Y%m%d_%H%M%S.txt"
+    max_file_size_mb: 10
+
+#==============================================================================
+# 日志配置
+#==============================================================================
+logging:
+  # 全局日志设置
+  global:
+    level: "info"
+    pattern: "[%Y-%m-%d %H:%M:%S.%e] [%l] [%n] %v"
+    async: true
+
+  # 文件日志配置
+  file:
+    enabled: true
+    filename: "logs/radar_mvp.log"
+    max_size_mb: 50
+    max_files: 5
+    rotation_time: "daily"
+
+  # 控制台日志配置
+  console:
+    enabled: true
+    colored: true
+
+  # 模块特定日志级别
+  modules:
+    data_receiver: "debug"
+    data_processor: "info"
+    task_scheduler: "info"
+    display_controller: "info"
+
+#==============================================================================
+# 测试和调试配置
+#==============================================================================
+debug:
+  # 调试模式设置
+  enabled: false
+  verbose_logging: false
+  dump_raw_data: false
+
+  # 性能分析
+  profiling:
+    enabled: false
+    output_file: "performance_profile.json"
+    sample_interval_ms: 100
+
+  # 内存检查
+  memory_check:
+    enabled: false
+    leak_detection: true
+    allocation_tracking: false
