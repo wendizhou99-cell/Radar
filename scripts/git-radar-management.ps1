@@ -64,15 +64,15 @@ function Submit-RadarChanges {
         [Parameter(Mandatory=$true)]
         [ValidateSet("feat", "fix", "docs", "style", "refactor", "perf", "test", "chore")]
         [string]$Type,
-        
+
         [Parameter(Mandatory=$true)]
         [ValidateSet("data-receiver", "data-processor", "gpu-acceleration", "real-time-viz", "task-scheduler", "common", "config", "build")]
         [string]$Scope,
-        
+
         [Parameter(Mandatory=$true)]
         [string]$Message
     )
-    
+
     # 检查是否意外包含私人文档
     $privateFiles = git ls-files docs_private/ 2>$null
     if ($privateFiles) {
@@ -82,7 +82,7 @@ function Submit-RadarChanges {
         Write-Host "git rm -r --cached docs_private/" -ForegroundColor White
         return
     }
-    
+
     git add .
     git commit -m "$Type($Scope): $Message"
     Write-Host "提交完成: $Type($Scope): $Message" -ForegroundColor Green
@@ -113,7 +113,7 @@ function Show-RemoteStatus {
 # 检查私人文档保护状态
 function Check-PrivateDocProtection {
     Write-Host "=== 私人文档保护检查 ===" -ForegroundColor Cyan
-    
+
     # 检查.gitignore中是否包含docs_private
     $gitignoreContent = Get-Content .gitignore -ErrorAction SilentlyContinue
     if ($gitignoreContent -contains "docs_private/") {
@@ -121,7 +121,7 @@ function Check-PrivateDocProtection {
     } else {
         Write-Host "❌ .gitignore中缺少docs_private/过滤" -ForegroundColor Red
     }
-    
+
     # 检查是否有私人文档被意外跟踪
     $trackedPrivateFiles = git ls-files docs_private/ 2>$null
     if ($trackedPrivateFiles) {
@@ -131,7 +131,7 @@ function Check-PrivateDocProtection {
     } else {
         Write-Host "✅ 没有私人文档被Git跟踪" -ForegroundColor Green
     }
-    
+
     # 检查本地是否存在私人文档
     if (Test-Path "docs_private") {
         $fileCount = (Get-ChildItem "docs_private" -Recurse -File).Count
