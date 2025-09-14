@@ -8,7 +8,7 @@ function Switch-ToFeatureBranch {
         [ValidateSet("data-receiver", "data-processor", "gpu-acceleration", "real-time-viz")]
         [string]$FeatureName
     )
-    
+
     git checkout "feature/$FeatureName"
 }
 
@@ -18,7 +18,7 @@ function New-FeatureBranch {
         [Parameter(Mandatory=$true)]
         [string]$FeatureName
     )
-    
+
     git checkout develop
     git checkout -b "feature/$FeatureName"
     Write-Host "创建并切换到分支: feature/$FeatureName" -ForegroundColor Green
@@ -30,7 +30,7 @@ function Merge-FeatureToDevelop {
         [Parameter(Mandatory=$true)]
         [string]$FeatureName
     )
-    
+
     git checkout develop
     git merge "feature/$FeatureName" --no-ff
     Write-Host "已将 feature/$FeatureName 合并到 develop 分支" -ForegroundColor Green
@@ -42,7 +42,7 @@ function Remove-MergedFeature {
         [Parameter(Mandatory=$true)]
         [string]$FeatureName
     )
-    
+
     git branch -d "feature/$FeatureName"
     Write-Host "已删除分支: feature/$FeatureName" -ForegroundColor Red
 }
@@ -64,15 +64,15 @@ function Submit-RadarChanges {
         [Parameter(Mandatory=$true)]
         [ValidateSet("feat", "fix", "docs", "style", "refactor", "perf", "test", "chore")]
         [string]$Type,
-        
+
         [Parameter(Mandatory=$true)]
         [ValidateSet("data-receiver", "data-processor", "gpu-acceleration", "real-time-viz", "task-scheduler", "common", "config", "build")]
         [string]$Scope,
-        
+
         [Parameter(Mandatory=$true)]
         [string]$Message
     )
-    
+
     git add .
     git commit -m "$Type($Scope): $Message"
     Write-Host "提交完成: $Type($Scope): $Message" -ForegroundColor Green
@@ -88,7 +88,7 @@ Set-Alias -Name "radar-commit" -Value Submit-RadarChanges
 Write-Host "Radar项目Git管理脚本已加载！" -ForegroundColor Green
 Write-Host "可用命令:" -ForegroundColor Cyan
 Write-Host "  radar-switch <branch-name>  - 切换到功能分支" -ForegroundColor White
-Write-Host "  radar-new <branch-name>     - 创建新功能分支" -ForegroundColor White  
+Write-Host "  radar-new <branch-name>     - 创建新功能分支" -ForegroundColor White
 Write-Host "  radar-merge <branch-name>   - 合并功能分支" -ForegroundColor White
 Write-Host "  radar-status                - 显示项目状态" -ForegroundColor White
 Write-Host "  radar-commit                - 标准化提交" -ForegroundColor White
