@@ -1,0 +1,34 @@
+# <type>(<scope>): <subject>
+#
+# <body>
+#
+# <footer>
+
+# Type should be one of the following:
+# * feat: A new feature
+# * fix: A bug fix
+# * docs: Documentation only changes
+# * style: Changes that do not affect the meaning of the code
+# * refactor: A code change that neither fixes a bug nor adds a feature
+# * perf: A code change that improves performance
+# * test: Adding missing tests or correcting existing tests
+# * chore: Changes to the build process or auxiliary tools
+
+# Scope should be one of:
+# * data-receiver: Data acquisition and hardware interface
+# * data-processor: Signal processing and analysis
+# * gpu-acceleration: CUDA and GPU optimization
+# * real-time-viz: Visualization and display
+# * task-scheduler: Task management and coordination
+# * common: Shared utilities and interfaces
+# * config: Configuration management
+# * build: Build system and dependencies
+
+# Subject should:
+# * use imperative, present tense: "change" not "changed" nor "changes"
+# * not capitalize first letter
+# * not end with a dot (.)
+
+# Body should include motivation for the change and contrast this with previous behavior
+
+# Footer should contain any information about Breaking Changes and reference GitHub issues

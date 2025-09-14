@@ -74,3 +74,28 @@ radar_mvp/third_party/yaml-cpp/**/.git*
 **/Thumbs.db
 **/*.swp
 **/*.swo
+
+# System files
+.DS_Store
+Thumbs.db
+
+# 项目特定
+config/local_config.yaml
+data/test_data/large_files/
+third_party/downloads/
+
+# 私人文档 (不上传到团队仓库)
+docs_private/
+
+# 用户特定配置
+.vscode/settings.json
+.vscode/launch.json
+*.vcxproj.user
+*.suo
+
+# 性能和调试文件
+*.pdb
+*.ilk
+*.map
+callgrind.out.*
+perf.data*
