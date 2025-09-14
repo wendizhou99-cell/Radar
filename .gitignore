@@ -51,7 +51,7 @@ radar_mvp/third_party/googletest/**/*.md
 radar_mvp/third_party/googletest/**/*.txt
 radar_mvp/third_party/googletest/**/.git*
 
-# SPDLog exclusions  
+# SPDLog exclusions
 radar_mvp/third_party/spdlog/example/
 radar_mvp/third_party/spdlog/tests/
 radar_mvp/third_party/spdlog/bench/
