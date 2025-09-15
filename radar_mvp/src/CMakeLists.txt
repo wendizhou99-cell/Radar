@@ -94,6 +94,11 @@ file(GLOB_RECURSE MODULE_SOURCES
     "modules/*.cu"
 )
 
+# 如果CUDA被禁用，排除CUDA相关源文件
+if(NOT ENABLE_CUDA)
+    list(FILTER MODULE_SOURCES EXCLUDE REGEX ".*cuda.*")
+endif()
+
 # 创建模块静态库
 add_library(radar_modules STATIC ${MODULE_SOURCES})
 
