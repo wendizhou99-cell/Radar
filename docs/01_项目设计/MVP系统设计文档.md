@@ -624,6 +624,339 @@ stateDiagram-v2
 - **特性**：CPU/GPU使用率、内存占用、处理延迟统计
 - **使用场景**：系统性能分析、瓶颈识别、资源优化
 
+### 2.3 详细架构设计
+
+基于前面的原理性架构，本节提供更详细的组件设计和线程模型，明确展示系统的模块职责分离、通信机制和并发调度关系。
+
+#### 2.3.1 详细组件架构与通信机制图
+
+该图详细展示了每个模块的内部组件、模块间的通信机制（缓冲区、队列）以及数据流/控制流的具体实现：
+
+```mermaid
+flowchart TB
+    subgraph "外部环境"
+        RADAR[雷达阵面<br/>Radar Array]
+        USER[用户界面<br/>User Interface]
+    end
+
+    subgraph "雷达数据处理系统详细架构"
+
+        subgraph "数据接收模块 (DataReceiver)"
+            DR_UDP[UDP监听器<br/>UDP Listener]
+            DR_PARSER[数据包解析器<br/>Packet Parser]
+            DR_VALIDATOR[数据验证器<br/>Data Validator]
+        end
+
+        subgraph "通信缓冲区层"
+            BUFFER_A[(环形缓冲区A<br/>Ring Buffer A<br/>原始数据)]
+            BUFFER_B[(环形缓冲区B<br/>Ring Buffer B<br/>处理数据)]
+            CMD_QUEUE[(命令队列<br/>Command Queue<br/>控制命令)]
+        end
+
+        subgraph "信号处理模块 (SignalProcessor)"
+            SP_READER[数据读取器<br/>Data Reader]
+            SP_ALGORITHM[信号处理算法<br/>Signal Algorithm]
+            SP_GPU[GPU计算单元<br/>GPU Compute Unit]
+        end
+
+        subgraph "数据处理模块 (DataProcessor)"
+            DP_READER[数据读取器<br/>Data Reader]
+            DP_CFAR[CFAR检测器<br/>CFAR Detector]
+            DP_TRACKER[航迹关联器<br/>Track Correlator]
+        end
+
+        subgraph "显示控制模块 (DisplayController)"
+            DC_READER[数据读取器<br/>Data Reader]
+            DC_RENDERER[图形渲染器<br/>Graphics Renderer]
+            DC_UI[用户交互处理<br/>UI Handler]
+        end
+
+        subgraph "命令发送模块 (CommandSender)"
+            CS_PROCESSOR[命令处理器<br/>Command Processor]
+            CS_SENDER[网络发送器<br/>Network Sender]
+        end
+
+        subgraph "任务调度器 (TaskScheduler)"
+            TS_MANAGER[生命周期管理器<br/>Lifecycle Manager]
+            TS_MONITOR[状态监控器<br/>Status Monitor]
+            TS_RESOURCE[资源分配器<br/>Resource Allocator]
+        end
+    end
+
+    %% 数据流 (下行流 - 高吞吐)
+    RADAR -->|UDP数据包| DR_UDP
+    DR_UDP --> DR_PARSER
+    DR_PARSER --> DR_VALIDATOR
+    DR_VALIDATOR -->|原始数据帧| BUFFER_A
+
+    BUFFER_A -->|缓存数据| SP_READER
+    SP_READER --> SP_ALGORITHM
+    SP_ALGORITHM --> SP_GPU
+    SP_GPU -->|处理结果| BUFFER_B
+
+    BUFFER_B -->|处理数据| DP_READER
+    DP_READER --> DP_CFAR
+    DP_CFAR --> DP_TRACKER
+    DP_TRACKER -->|目标列表| DC_READER
+
+    DC_READER --> DC_RENDERER
+    DC_RENDERER --> DC_UI
+    DC_UI -->|可视化输出| USER
+
+    %% 控制流 (上行流 - 低延迟高优先级)
+    USER -->|用户操作| DC_UI
+    DC_UI -->|控制命令| CMD_QUEUE
+    CMD_QUEUE -->|命令数据| CS_PROCESSOR
+    CS_PROCESSOR --> CS_SENDER
+    CS_SENDER -->|控制参数| RADAR
+
+    %% 调度控制关系 (虚线表示管理关系)
+    TS_MANAGER -.->|生命周期管理| DR_UDP
+    TS_MANAGER -.->|任务分配| SP_ALGORITHM
+    TS_MANAGER -.->|状态协调| DP_CFAR
+    TS_MANAGER -.->|显示控制| DC_RENDERER
+    TS_MONITOR -.->|性能监控| BUFFER_A
+    TS_MONITOR -.->|性能监控| BUFFER_B
+    TS_RESOURCE -.->|资源分配| SP_GPU
+
+    %% 样式定义
+    classDef external fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef receiver fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef buffer fill:#fff3e0,stroke:#ef6c00,stroke-width:3px
+    classDef processor fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef display fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef scheduler fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+
+    class RADAR,USER external
+    class DR_UDP,DR_PARSER,DR_VALIDATOR receiver
+    class BUFFER_A,BUFFER_B,CMD_QUEUE buffer
+    class SP_READER,SP_ALGORITHM,SP_GPU,DP_READER,DP_CFAR,DP_TRACKER processor
+    class DC_READER,DC_RENDERER,DC_UI,CS_PROCESSOR,CS_SENDER display
+    class TS_MANAGER,TS_MONITOR,TS_RESOURCE scheduler
+```
+
+**架构说明**：
+
+1. **数据流设计（生产者-消费者链）**：
+   - **环形缓冲区A**：数据接收模块（生产者）→ 信号处理模块（消费者）
+   - **环形缓冲区B**：信号处理模块（生产者）→ 数据处理模块（消费者）
+   - **优势**：解耦模块、平滑流量波动、支持并行处理
+
+2. **控制流设计（命令模式）**：
+   - **命令队列**：高优先级、低延迟的控制命令通道
+   - **与数据流隔离**：避免控制命令被阻塞在数据处理流程中
+
+3. **调度关系**：
+   - **生命周期管理**：统一的模块启停控制
+   - **资源分配**：动态的CPU/GPU资源调度
+   - **性能监控**：实时的系统状态监控
+
+#### 2.3.2 线程模型与并发调度图
+
+该图展示了系统的线程设计、每个线程的职责以及线程间的同步机制：
+
+```mermaid
+flowchart TB
+    subgraph "线程模型架构"
+
+        subgraph "数据接收线程 (I/O密集型)"
+            T1[接收线程<br/>Receiver Thread]
+            T1_WORK[UDP监听<br/>数据解析<br/>缓冲区写入]
+        end
+
+        subgraph "信号处理线程池 (计算密集型)"
+            T2_1[处理线程1<br/>Process Thread 1]
+            T2_2[处理线程2<br/>Process Thread 2]
+            T2_N[处理线程N<br/>Process Thread N]
+            T2_WORK[从缓冲区A读取<br/>GPU计算调度<br/>结果写入缓冲区B]
+        end
+
+        subgraph "数据处理线程 (算法密集型)"
+            T3[处理线程<br/>Algorithm Thread]
+            T3_WORK[CFAR检测<br/>航迹关联<br/>目标输出]
+        end
+
+        subgraph "GUI主线程 (UI更新)"
+            T4[主线程<br/>Main UI Thread]
+            T4_WORK[界面渲染<br/>用户交互<br/>显示更新]
+        end
+
+        subgraph "命令发送线程 (控制流)"
+            T5[命令线程<br/>Command Thread]
+            T5_WORK[命令队列监控<br/>网络发送<br/>参数控制]
+        end
+
+        subgraph "调度管理线程 (系统监控)"
+            T6[调度线程<br/>Scheduler Thread]
+            T6_WORK[生命周期管理<br/>资源分配<br/>状态监控]
+        end
+
+        subgraph "线程同步机制"
+            SYNC_A[缓冲区A同步<br/>Mutex + CondVar]
+            SYNC_B[缓冲区B同步<br/>Mutex + CondVar]
+            SYNC_CMD[命令队列同步<br/>Atomic Queue]
+            SYNC_GPU[GPU资源锁<br/>Resource Mutex]
+        end
+    end
+
+    %% 线程间数据流
+    T1 -->|写入| SYNC_A
+    SYNC_A -->|读取| T2_1
+    SYNC_A -->|读取| T2_2
+    SYNC_A -->|读取| T2_N
+
+    T2_1 -->|写入| SYNC_B
+    T2_2 -->|写入| SYNC_B
+    T2_N -->|写入| SYNC_B
+    SYNC_B -->|读取| T3
+
+    T3 -->|异步通知| T4
+    T4 -->|命令生成| SYNC_CMD
+    SYNC_CMD -->|命令处理| T5
+
+    %% GPU资源竞争
+    T2_1 -.->|申请/释放| SYNC_GPU
+    T2_2 -.->|申请/释放| SYNC_GPU
+    T2_N -.->|申请/释放| SYNC_GPU
+
+    %% 调度管理
+    T6 -.->|管理| T1
+    T6 -.->|管理| T2_1
+    T6 -.->|管理| T3
+    T6 -.->|管理| T4
+    T6 -.->|管理| T5
+
+    %% 样式定义
+    classDef io_thread fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef compute_thread fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef ui_thread fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef control_thread fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef sync_mechanism fill:#fce4ec,stroke:#c2185b,stroke-width:3px
+
+    class T1,T1_WORK io_thread
+    class T2_1,T2_2,T2_N,T2_WORK,T3,T3_WORK compute_thread
+    class T4,T4_WORK ui_thread
+    class T5,T5_WORK,T6,T6_WORK control_thread
+    class SYNC_A,SYNC_B,SYNC_CMD,SYNC_GPU sync_mechanism
+```
+
+**线程模型说明**：
+
+1. **线程职责分离**：
+   - **数据接收线程**：专门处理I/O密集的网络通信，不能被阻塞
+   - **信号处理线程池**：并行处理计算密集的信号算法，充分利用多核CPU
+   - **数据处理线程**：处理有时序依赖的高级算法
+   - **GUI主线程**：专门处理用户界面更新，保证界面响应
+   - **命令发送线程**：独立处理控制命令，保证控制实时性
+   - **调度管理线程**：统一的系统监控和资源管理
+
+2. **同步机制设计**：
+   - **环形缓冲区**：使用mutex和条件变量实现线程安全的生产者-消费者模式
+   - **命令队列**：使用无锁原子队列实现高优先级的命令传输
+   - **GPU资源锁**：确保GPU计算资源的互斥访问
+   - **异步通知**：UI线程通过异步机制获取处理结果，避免阻塞
+
+3. **性能优化策略**：
+   - **线程池**：信号处理使用线程池，避免频繁创建销毁线程的开销
+   - **数据局部性**：每个线程尽量处理连续的数据块，提高缓存命中率
+   - **负载均衡**：线程池中的工作线程竞争获取任务，自然实现负载均衡
+
+**关键设计决策**：
+
+| 设计选择           | 理由                         | 潜在问题           | 解决方案             |
+| ------------------ | ---------------------------- | ------------------ | -------------------- |
+| **线程池处理信号** | 信号处理可并行，充分利用多核 | GPU资源竞争        | GPU资源锁+任务批处理 |
+| **单线程数据处理** | CFAR、航迹关联有时序依赖     | 可能成为瓶颈       | 后续可考虑流水线并行 |
+| **独立命令线程**   | 保证控制命令实时响应         | 增加线程管理复杂度 | 使用无锁队列降低开销 |
+| **环形缓冲区**     | 高效的生产者-消费者通信      | 缓冲区大小需要调优 | 配置化缓冲区大小     |
+
+#### 2.3.3 模块接口与数据结构
+
+为支持上述架构，系统定义了统一的接口规范和数据结构：
+
+```mermaid
+classDiagram
+    class IModule {
+        <<interface>>
+        +Initialize(config: Config) ErrorCode
+        +Start() ErrorCode
+        +Stop() ErrorCode
+        +GetStatus() ModuleStatus
+    }
+
+    class IDataSource {
+        <<interface>>
+        +GetData() DataPacket
+        +HasData() bool
+        +RegisterCallback(callback) void
+    }
+
+    class IDataProcessor {
+        <<interface>>
+        +ProcessData(input: DataPacket) DataPacket
+        +SetProcessingParams(params) void
+        +GetProcessingStats() ProcessingStats
+    }
+
+    class IDataConsumer {
+        <<interface>>
+        +ConsumeData(data: DataPacket) void
+        +SetConsumptionRate(rate) void
+    }
+
+    class DataReceiver {
+        -udpSocket: UDPSocket
+        -packetValidator: PacketValidator
+        -outputBuffer: RingBuffer
+        +Initialize(config) ErrorCode
+        +Start() ErrorCode
+        +Stop() ErrorCode
+    }
+
+    class SignalProcessor {
+        -inputBuffer: RingBuffer
+        -outputBuffer: RingBuffer
+        -gpuManager: GPUManager
+        -threadPool: ThreadPool
+        +ProcessData(input) DataPacket
+    }
+
+    class DataProcessor {
+        -cfarDetector: CFARDetector
+        -trackCorrelator: TrackCorrelator
+        +ProcessData(input) DataPacket
+    }
+
+    class DisplayController {
+        -renderer: GraphicsRenderer
+        -uiHandler: UIHandler
+        +ConsumeData(data) void
+        +HandleUserInput(event) void
+    }
+
+    IModule <|-- DataReceiver
+    IModule <|-- SignalProcessor
+    IModule <|-- DataProcessor
+    IModule <|-- DisplayController
+
+    IDataSource <|-- DataReceiver
+    IDataProcessor <|-- SignalProcessor
+    IDataProcessor <|-- DataProcessor
+    IDataConsumer <|-- DisplayController
+
+    DataReceiver --> SignalProcessor : RingBuffer A
+    SignalProcessor --> DataProcessor : RingBuffer B
+    DataProcessor --> DisplayController : Async Notification
+```
+
+这个详细的架构设计为您提供了：
+1. **明确的模块职责分离**：每个组件都有清晰的单一职责
+2. **具体的通信机制**：通过缓冲区和队列实现解耦的模块通信
+3. **完整的线程模型**：支持高并发和实时处理的线程架构
+4. **标准化的接口设计**：便于模块的独立开发和测试
+
+基于这个架构，您可以开始具体的模块实现，每个模块都有明确的接口契约和性能目标。
+
 ## 3. 核心设计原则
 
 本MVP系统的设计遵循以下核心原则，确保系统的可靠性、可扩展性和可维护性：
