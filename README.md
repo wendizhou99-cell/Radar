@@ -26,18 +26,68 @@
 - **高吞吐量**: 目标处理能力1GB/s数据流
 
 ### 系统架构
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   数据接收模块   │───▶│   数据处理模块   │───▶│   显示控制模块   │
-│  Data Receiver  │    │ Data Processor  │    │Display Controller│
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                    ┌─────────────────┐
-                    │   任务调度器     │
-                    │ Task Scheduler  │
-                    └─────────────────┘
+```mermaid
+flowchart TB
+    subgraph "外部环境 (External Environment)"
+        RADAR[雷达阵面<br/>Radar Array]
+        USER[用户界面<br/>User Interface]
+    end
+
+    subgraph "MVP核心系统 (MVP Core System)"
+        subgraph "调度控制层 (Scheduling Layer)"
+            SCHEDULER[任务调度器<br/>Task Scheduler]
+            THREAD_POOL[线程池<br/>Thread Pool]
+        end
+
+        subgraph "数据处理流水线 (Data Processing Pipeline)"
+            RECEIVER[数据接收模块<br/>Data Receiver]
+            PROCESSOR[数据处理模块<br/>Data Processor]
+            VISUALIZER[数据可视化模块<br/>Data Visualizer]
+        end
+
+        subgraph "支撑服务层 (Support Services)"
+            CONFIG_MGR[配置管理器<br/>Config Manager]
+            MONITOR[监控服务<br/>Monitor Service]
+        end
+
+        subgraph "数据队列 (Data Queues)"
+            RAW_QUEUE[(原始数据队列<br/>Raw Data Queue)]
+            PROCESSED_QUEUE[(处理数据队列<br/>Processed Data Queue)]
+        end
+    end
+
+    %% 数据流向
+    RADAR -->|UDP数据包<br/>UDP Packets| RECEIVER
+    RECEIVER -->|原始数据<br/>Raw Data| RAW_QUEUE
+    RAW_QUEUE -->|缓存数据<br/>Buffered Data| PROCESSOR
+    PROCESSOR -->|处理结果<br/>Processed Data| PROCESSED_QUEUE
+    PROCESSED_QUEUE -->|显示数据<br/>Display Data| VISUALIZER
+    VISUALIZER -->|可视化输出<br/>Visual Output| USER
+
+    %% 调度控制关系
+    SCHEDULER -.->|生命周期管理<br/>Lifecycle Control| RECEIVER
+    SCHEDULER -.->|任务分配<br/>Task Assignment| PROCESSOR
+    SCHEDULER -.->|状态协调<br/>State Coordination| VISUALIZER
+    THREAD_POOL -.->|线程资源<br/>Thread Resources| PROCESSOR
+
+    %% 配置和监控
+    CONFIG_MGR -.->|配置参数<br/>Configuration| RECEIVER
+    CONFIG_MGR -.->|配置参数<br/>Configuration| PROCESSOR
+    CONFIG_MGR -.->|配置参数<br/>Configuration| VISUALIZER
+    MONITOR -.->|性能监控<br/>Performance Monitoring| RECEIVER
+    MONITOR -.->|性能监控<br/>Performance Monitoring| PROCESSOR
+    MONITOR -.->|性能监控<br/>Performance Monitoring| VISUALIZER
+
+    %% 应用全局样式
+    classDef base fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef core fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef app fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    classDef adv fill:#f8bbd9,stroke:#c2185b,stroke-width:2px
+
+    class RADAR,USER base
+    class SCHEDULER,THREAD_POOL,CONFIG_MGR,MONITOR core
+    class RECEIVER,PROCESSOR,VISUALIZER app
+    class RAW_QUEUE,PROCESSED_QUEUE adv
 ```
 
 ## 🚀 快速开始

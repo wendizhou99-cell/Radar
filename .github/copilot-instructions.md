@@ -1,347 +1,115 @@
 # GitHub Copilot Instructions for Radar MVP System
 
-This is a **GPU-accelerated phased array radar data processing system** built in C++ with modular architecture and real-time performance requirements.
+This document provides essential guidelines for AI-assisted development on this project. Please adhere to these instructions to ensure code quality, consistency, and alignment with our architecture.
 
-## 🚨 CRITICAL: Interface Compliance Requirements
+---
 
-**MANDATORY**: Before any code generation, read and follow `.github/ai-interface-compliance.md` for strict interface compliance rules.
+### 1. High-Level Project Goal (项目核心目标)
 
-**Key Violations to Avoid**:
-- Creating custom data types instead of using existing project types from `types.h`
-- Implementing classes without proper interface inheritance from `interfaces.h`
-- Using standard library types where project-specific types exist (e.g., std::vector<float> vs AlignedFloatVector)
-- Module integration without checking existing interface contracts
+- **Primary Goal**: Develop a **GPU-accelerated phased array radar data processing system**.
+- **Core Focus**: Real-time performance, modular architecture, and scalability.
+- **Current Stage**: MVP (Minimum Viable Product) development. Focus on core functionality over extensive features.
 
-**Pre-Coding Verification Required**:
-1. Read `include/common/types.h`, `include/common/interfaces.h`, `include/common/error_codes.h`
-2. Verify target module interface in `include/modules/[module_name].h`
-3. Check integration patterns in existing module implementations
+---
 
-## Core Architecture
+### 2. Core Technologies & Stack (核心技术栈)
 
-**Main Structure**: `radar_mvp/` contains the MVP implementation with layered architecture:
-- `include/common/` - Core interfaces and data types shared across modules (interfaces.h, types.h, error_codes.h)
-- `include/modules/` - Module-specific interfaces (data_receiver, data_processor, task_scheduler, display_controller)
-- `src/modules/` - Module implementations with concrete classes (base_receiver.cpp, hardware_receiver.cpp, etc.)
-- `src/application/` - System orchestration layer (RadarApplication class with full lifecycle management)
-- `third_party/` - External dependencies managed as git submodules (spdlog, yaml-cpp, googletest)
+- **Programming Language**: C++17
+- **Build System**: CMake
+- **GPU Acceleration**: CUDA
+- **Key Libraries**:
+    - **Logging**: `spdlog` (Use `RADAR_INFO`, `RADAR_ERROR` macros)
+    - **Configuration**: `yaml-cpp` (Load from `configs/config.yaml`)
+    - **Testing**: `googletest`
+- **(中文补充)**: *请在此处添加其他关键依赖库，例如 `Eigen`、`FFTW` 等。*
 
-**Key Pattern**: All modules inherit from `IModule` base interface in `common/interfaces.h`. Standardized error handling uses layered error codes (0x0000-SystemErrors, 0x1000-DataReceiverErrors, etc.) with `ErrorCode` return values instead of exceptions.
+---
 
-## Build System
-
-**CMake Configuration**: Multi-level CMakeLists.txt structure:
-- Root: Global compiler settings, C++17 standard, MSVC/GCC/Clang support with specific optimization flags
-- `src/CMakeLists.txt`: Creates static libraries (radar_common, radar_modules, radar_application) with PUBLIC/PRIVATE dependency linking
-- Third-party libraries linked via git submodules (not package managers)
-
-**Critical Dependencies**: Initialize submodules FIRST with `.\download_dependencies.ps1` before any build attempts.
+### 3. Architectural Principles (核心架构原则)
 
-**Build Commands**:
-```powershell
-# Windows PowerShell (REQUIRED sequence)
-.\download_dependencies.ps1  # Initialize git submodules - MUST run first
-cmake -B build -S .
-cmake --build build --config Release
-```
+- **Modular Design**: The system is composed of independent modules (e.g., DataReceiver, DataProcessor). All modules must inherit from the `IModule` interface defined in `include/common/interfaces.h`.
+- **Interface-Driven Development**: Always code against interfaces, not concrete implementations. Do not create custom data types if a suitable one exists in `include/common/types.h`.
+- **Error Handling**: **No exceptions in performance-critical paths.** Use the `ErrorCode` return type as defined in `include/common/error_codes.h`. Each module has its own error code range (e.g., `DataReceiverErrors::*`).
+- **Configuration Management**: All module configurations should be managed by a central `ConfigManager` and defined in `configs/config.yaml`.
 
-## Development Workflow
-
-**Module Development Pattern** (based on `docs_private/03_开发指南/模块开发流程.md`):
-1. Define interface in `include/modules/[module_name].h`
-2. Implement in `src/modules/[module_name]/` directory (note: modules have subdirectories)
-3. Link to radar_common library for shared utilities
-4. Use structured logging via spdlog with RADAR_* macros (RADAR_INFO, RADAR_ERROR)
-
-**File Creation Order** (critical for dependencies from `docs_private/03_开发指南/文件创建顺序.md`):
-1. `include/common/types.h` - Basic type definitions (ComplexFloat, Timestamp, AlignedVectors)
-2. `include/common/error_codes.h` - Layered error codes (SystemErrors::SUCCESS, DataReceiverErrors::*, etc.)
-3. `include/common/interfaces.h` - Abstract base classes (IModule, callback function types)
-4. Module interfaces in `include/modules/`
-5. Module implementations in `src/modules/[module_name]/`
-6. Application layer (`src/application/radar_application.cpp`) orchestrates all modules
-
-## Project-Specific Conventions
-
-**Logging**: Use structured logging with `RADAR_INFO`, `RADAR_ERROR` macros. Logger initialization required in main.cpp before any module usage.
-
-**Configuration**: Centralized YAML config in `configs/config.yaml`, managed by ConfigManager singleton. Configuration sections: system, data_receiver, data_processor, task_scheduler, display_controller.
-
-**Error Handling**: Layered error code system (0x0000-SystemErrors, 0x1000-DataReceiverErrors, 0x2000-DataProcessorErrors, etc.). Methods return `ErrorCode` rather than exceptions for performance-critical paths.
-
-**Naming Conventions** (from actual codebase):
-- Namespace pattern: `radar::[layer]` (e.g., `radar::common`, `radar::modules`, `radar::application`)
-- Member variables: underscore suffix (`member_`)
-- Private methods: camelCase (`methodName`)
-- Public interfaces: camelCase (`publicMethod`)
-- Constants: ALL_CAPS_UNDERSCORE (`MAX_BUFFER_SIZE`)
-- Atomic variables: descriptive suffix (`running_`, `shouldStop_`)
-- Mutexes: descriptive + Mutex (`bufferMutex_`, `statsMutex_`)
-
-**Data Types**: GPU-optimized types like `ComplexFloat`, `AlignedFloatVector`, `AlignedComplexVector` for I/Q signal processing.
-
-## AI Interaction Guidelines
-
-**Document-First Approach**: Always request specific documentation from `docs_private/` before starting development. Use `docs_private/00_快速开始/文档智能索引.md` to identify required documents.
-
-**Required Context Documents** for different tasks:
-- Module development: `docs_private/03_开发指南/模块开发流程.md` + `docs_private/02_编码规范/代码风格指南.md`
-- Interface design: `docs_private/02_编码规范/设计模式应用.md`
-- Performance work: `docs_private/09_最佳实践/性能优化指南.md`
-
-**Template Usage**: Leverage `docs_private/06_自动化模板/模块模板/` for consistent code structure.
-
-## Core AI Workflow Principles
-
-**MANDATORY Interface Compliance Check**: Before any code generation, AI must read and verify compliance with existing interfaces. See `.github/ai-interface-compliance.md` for detailed enforcement rules.
-
-**CRITICAL: Immediate Error Validation Rule** ⚠️
-**Every code file MUST be validated for errors immediately after creation before proceeding to the next file.**
-
-**Mandatory Error Checking Workflow**:
-1. **Complete ONE file at a time** - Never create multiple files in sequence without validation
-2. **Immediate Error Check** - Use `get_errors` tool right after each file creation/modification
-3. **Fix ALL errors** - Resolve every compilation error before proceeding
-4. **Verify Fix** - Re-run error check to confirm resolution
-5. **Only then proceed** - Move to next file only after current file is error-free
-
-**Why This Rule Is Critical**:
-- **Prevents Error Cascade**: Early errors compound into complex debugging sessions
-- **Maintains Code Quality**: Ensures each component is solid before building upon it
-- **Reduces Debugging Time**: Fix issues when context is fresh, not after building entire modules
-- **Interface Compliance**: Catches interface mismatches immediately, not after entire modules are built
-
-**Error Check Triggers** (MUST check after):
-- Creating any new `.h` or `.cpp` file
-- Modifying existing interface or type definitions
-- Adding new class declarations or function signatures
-- Changing inheritance hierarchies or template parameters
-- Completing any logical code block or component
-
-**Error Resolution Priority**:
-1. **Compilation Errors** - Fix immediately, these block all other work
-2. **Interface Mismatches** - Critical for module integration
-3. **Type Conflicts** - Often indicate design issues requiring architectural fixes
-4. **Template/Generic Issues** - Can cascade into multiple files
-
-**Intent Clarification Protocol** (from `docs_private/01_AI交互规范/核心交互原则.md`):
-- Use specific technical terms, avoid ambiguous descriptions
-- Provide concrete performance requirements and constraints
-- Include sufficient context about project stage (MVP/optimization/refactoring)
-- Minimize round-trip communications: aim for 3 conversation rounds per module development
-
-**Requirements Analysis Thinking** (from `docs_private/07_AI工作流/需求分析流程.md`):
-- Extract key information: identify task type (develop/optimize/integrate), technical objects, quality requirements
-- Perform intent reasoning: analyze business goals, usage scenarios, integration needs, constraint analysis
-- Evaluate system impact: assess data layer, service layer, frontend, and deployment implications
-
-**Progressive Code Generation** (from `docs_private/07_AI工作流/代码生成流程.md`):
-1. **Stage 0**: MANDATORY - Interface compliance verification (read existing interfaces and types)
-2. **Stage 1**: Interfaces and data structures (compilable with existing types)
-3. **Stage 2**: Core implementation skeleton (runnable with proper inheritance)
-4. **Stage 3**: Complete functionality (feature complete with integration verified)
-5. **Stage 4**: Integration and optimization (production ready with full compliance)
-
-## Design Pattern Applications
-
-**Strategy Pattern Usage** (from `docs_private/02_编码规范/设计模式应用.md`):
-- Use for CPU/GPU processing switches, algorithm selection, performance optimization strategies
-- Implement `IProcessingStrategy` interface with concrete strategies (`GPUProcessingStrategy`, `CPUProcessingStrategy`)
-- Include performance characteristics: latency, throughput, power consumption, memory requirements
-
-**Module Interface Design**:
-- All modules inherit from `IModule` base interface
-- Use factory patterns for strategy creation (`AuthStrategyFactory`, `ProcessorFactory`)
-- Apply facade pattern for unified service interfaces (`AuthenticationService`, `DataProcessingService`)
-
-## Code Style Standards
-
-**C++17 Modern Features** (from `docs_private/02_编码规范/代码风格指南.md`):
-- Use `auto` for obvious or complex types, avoid for basic types unless explicit
-- Prefer smart pointers for resource management: `std::unique_ptr` for ownership, `std::shared_ptr` for sharing
-- Factory methods return smart pointers, interface parameters use raw pointers or references
-
-**File Organization Strategy**:
-```
-src/modules/[module_name]/
-├── include/
-│   ├── interfaces/     # Public interface definitions
-│   ├── types/         # Data type definitions
-│   └── [module_name].h # Main module header
-├── src/
-│   ├── strategies/    # Strategy implementations
-│   ├── factories/     # Factory class implementations
-│   └── [service].cpp  # Main service implementation
-├── tests/
-│   ├── unit/          # Unit tests
-│   └── integration/   # Integration tests
-└── configs/
-    └── [config].yaml  # Configuration examples
-```
-
-**Layered Architecture Implementation**:
-- **Presentation Layer**: API controllers, data validation, response formatting
-- **Business Layer**: Service classes, strategy implementations, workflow orchestration
-- **Data Layer**: Repository interfaces, entity models, data transformation
-- **Infrastructure Layer**: Configuration management, logging, exception handling
-
-## Critical Integration Points
-
-**GPU Processing**: Code must support both CPU and GPU execution paths. GPU-specific code likely uses CUDA (check CMakeLists.txt for CUDA flags).
-
-**Real-time Requirements**: Performance-critical modules must meet latency requirements defined in system specs. Use async processing patterns where specified.
-
-**Thread Management**: Task scheduler coordinates module lifecycle. Modules should be thread-safe and support graceful shutdown.
-
-**Data Flow**: Follows receiver → processor → visualizer pipeline with task scheduler orchestrating execution.
-
-## Testing Strategy
-
-**Test Structure**: Separate unit tests (`tests/unit_tests/`) and integration tests (`tests/integration_tests/`).
-
-**Test Dependencies**: GoogleTest framework available via third_party. Link radar module libraries for testing.
-
-**Test Patterns**: Create test data files for modules (see `test_data_receiver.cpp` example with `createTestDataFile()` helper).
-
-When implementing new features, always consider the real-time processing requirements and modular architecture constraints specific to radar systems.
-
-## Performance Optimization Guidelines
-
-**Performance Analysis Framework** (from `docs_private/09_最佳实践/性能优化指南.md`):
-- **Computing Performance**: Throughput, latency, CPU utilization, concurrency
-- **Memory Performance**: Usage patterns, allocation efficiency, cache hit rates, bandwidth utilization
-- **I/O Performance**: Disk/network I/O rates, wait times, queue depths
-- **GPU Performance**: Utilization, memory usage, data transfer rates, kernel execution times
-
-**AI-Generated Code Performance Patterns**:
-- AI code tends to be overly conservative with excessive safety checks
-- Look for unnecessary validations in tight loops (performance bottleneck)
-- Batch operations instead of per-item processing for GPU workloads
-- Profile memory allocation patterns - AI may not optimize for reuse
-
-**Optimization Priorities for Radar Systems**:
-1. **GPU Memory Management**: Minimize CPU-GPU data transfers, use pinned memory
-2. **Real-time Constraints**: Meet latency requirements (typically <100ms for radar processing)
-3. **Batch Processing**: Process multiple radar packets together for better GPU utilization
-4. **Memory Alignment**: Use aligned data structures for SIMD and GPU operations
-
-## Dependency Management Strategy
-
-**Layered Dependency Model** (from `docs_private/03_开发指南/依赖管理策略.md`):
-```
-Application Layer → Business Layer → Service Layer → Infrastructure Layer → Third-party Libraries
-```
-
-**Dependency Principles**:
-- **Unidirectional Dependencies**: Upper layers depend on lower layers, never reverse
-- **Interface Segregation**: Modules depend only on interfaces they need
-- **Dependency Inversion**: High-level modules depend on abstractions, not implementations
-- **Stable Dependencies**: Depend on stable modules, avoid frequently changing dependencies
-
-**Third-party Library Categories**:
-- **Core Runtime**: CUDA Runtime, spdlog, yaml-cpp (essential for system operation)
-- **Development Tools**: GoogleTest, CMake tools (build and test only)
-- **Optional Features**: OpenGL, Boost (feature-specific dependencies)
-
-## Debugging Strategies for AI-Generated Code
-
-**AI Code Debugging Challenges** (from `docs_private/09_最佳实践/调试技巧.md`):
-- Logic paths may be more complex than expected due to AI's safety-first approach
-- Multiple error handling branches can obscure the actual problem
-- Performance issues often hidden behind "safe" implementations
-
-**Debugging Approach**:
-1. **Understand AI Logic**: Read AI-generated comments to understand the intended design pattern
-2. **Identify Bottlenecks**: Look for excessive validation loops and redundant safety checks
-3. **Trace Data Flow**: Follow data transformations through the pipeline using logging
-4. **Use Profiling Tools**: GPU profilers (nsight) for CUDA code, CPU profilers for host code
-
-**Common AI Code Anti-patterns to Watch For**:
-- Excessive input validation in performance-critical paths
-- Overly generic solutions for specific radar processing needs
-- Unnecessary memory allocations in real-time processing loops
-- Complex error handling that obscures core algorithm logic
-
-## Anti-patterns to Avoid
-
-**Over-dependency Anti-patterns** (from `docs_private/09_最佳实践/反模式警示.md`):
-- Don't blindly accept all AI suggestions without reviewing for project constraints
-- Avoid AI-generated "universal" solutions that add unnecessary complexity
-- Maintain control over architectural decisions, use AI for implementation guidance
-
-**Over-engineering Anti-patterns**:
-- Resist AI tendency to create overly abstract designs for simple needs
-- Avoid unnecessary design patterns for straightforward radar data processing
-- Keep solutions proportional to actual requirements, not theoretical extensibility
-
-**Documentation Standards** (from `docs_private/02_编码规范/注释和文档规范.md`):
-- Use Doxygen format for all public interfaces: `@brief`, `@param`, `@return`, `@note`
-- Include performance characteristics in comments: latency expectations, memory usage
-- Document thread safety requirements explicitly for radar real-time constraints
-- Add `@warning` for initialization order dependencies and resource management
-
-## Development Environment Setup
-
-**System Requirements** (from `docs_private/04_技术栈配置/硬件环境要求.md`):
-- **Windows**: Windows 10 20H2+ or Windows 11, x64 architecture, 16GB+ RAM (32GB recommended)
-- **Linux**: Ubuntu 22.04 LTS preferred, kernel 5.15+, x86_64 architecture
-- **GPU**: NVIDIA GPU with CUDA 12.2+ support, 8GB+ VRAM for optimal performance
-- **Storage**: 50GB+ available space, SSD recommended for build performance
-
-**Critical Environment Setup** (from `docs_private/04_技术栈配置/开发环境配置.md`):
-```powershell
-# Windows PowerShell setup sequence
-choco install -y git cmake ninja visualstudio2022buildtools cuda
-code --install-extension ms-vscode.cpptools ms-vscode.cmake-tools nvidia.nsight-vscode-edition
-```
-
-**Performance Targets for Real-time Processing**:
-- **Data Processing Latency**: Target <5ms, Critical <10ms, Maximum <20ms
-- **GPU Computation**: Target <2ms, Critical <5ms for CUDA kernel execution
-- **Throughput**: Target 1GB/s data ingestion, 10k samples/ms signal processing
-- **Resource Utilization**: CPU 60-80% optimal, GPU 70-90% optimal, Memory <70%
-
-## Pre-Development Checklist
-
-**CRITICAL Interface Compliance** (MUST be completed FIRST):
-- [ ] **Read Interface Contracts**: Review `include/common/interfaces.h` for base interface definitions
-- [ ] **Verify Data Types**: Check `include/common/types.h` for all available project data types
-- [ ] **Review Error Patterns**: Understand `include/common/error_codes.h` for error handling conventions
-- [ ] **Check Module Interface**: Read target module interface in `include/modules/[module_name].h`
-- [ ] **Study Integration Examples**: Review existing module implementations for patterns
-
-**Essential Preparation** (from `docs_private/00_快速开始/检查清单.md`):
-- [ ] **Compiler Verification**: GCC 9+ or MSVC 2019+ confirmed
-- [ ] **CUDA Environment**: Run `nvcc --version`, compile CUDA samples
-- [ ] **CMake Configuration**: Test build system with CMake 3.16+
-- [ ] **Dependencies Ready**: Third-party libraries (OpenCV, Eigen, FFTW) verified
-- [ ] **Hardware Resources**: GPU memory, compute capability, CPU cores confirmed
-- [ ] **Code Templates**: Module templates from `docs_private/06_自动化模板/` prepared
-
-**Documentation Review Requirements**:
-- [ ] **Architecture Documentation**: Review latest system architecture from `docs/01_项目设计/`
-- [ ] **Interface Specifications**: Check `include/interfaces/` for current API definitions
-- [ ] **Coding Standards**: Familiar with `docs/03_技术规范/代码编写规范.md`
-- [ ] **Radar System Conventions**: Understand data formats, processing flows, performance requirements
-
-## Architecture Integration Analysis
-
-**Coupling Analysis Framework** (from `docs_private/07_AI工作流/架构耦合分析.md`):
-When developing new modules, AI must immediately analyze integration challenges:
-
-1. **Data Source Analysis**: Where does data come from? Database, API, direct hardware interface?
-2. **Interface Dependencies**: Which existing services need to be called? What are the interface contracts?
-3. **Performance Impact**: Will this new module affect existing real-time processing pipelines?
-4. **Data Structure Compatibility**: Are there type mismatches, naming convention conflicts, or missing fields?
-
-**Proactive Integration Strategy**:
-- **Adapter Pattern**: Create conversion layers for incompatible data structures (zero intrusion approach)
-- **Unified Models**: Modify existing structures when feasible for long-term consistency
-- **Interface Evolution**: Plan for backward compatibility when extending existing APIs
-- **Performance Profiling**: Measure integration impact on existing real-time constraints
-
-**Required Integration Information Request Template**:
-> "To ensure proper integration with existing radar systems, please provide:
-> 1. **Data Structure Definitions**: Relevant C++ headers, database schemas, or API models
-> 2. **Existing Interface Contracts**: Service APIs, callback definitions, or communication protocols
-> 3. **System Architecture Context**: Module interaction diagrams or dependency mappings"
+---
+
+### 4. Key Interfaces & Data Types (关键接口与数据类型)
+
+This is a critical section. Before writing any code, you **MUST** familiarize yourself with these core components.
+
+- **`IModule` (`include/common/interfaces.h`)**: The base interface for all modules. It defines the component lifecycle (`initialize`, `run`, `stop`).
+- **`ErrorCode` (`include/common/error_codes.h`)**: The standard for returning function status. `SystemErrors::SUCCESS` indicates success.
+- **Core Data Types (`include/common/types.h`)**:
+    - `ComplexFloat`: For I/Q signal data.
+    - `AlignedComplexVector`: For GPU-optimized data batches.
+    - `Timestamp`: For data packet timing.
+    - **(中文补充)**: *请优先使用这些项目特定的数据类型，而不是 `std::vector` 或原生类型，以确保性能和内存对齐。*
+
+---
+
+### 5. Development Workflow (模块开发流程)
+
+Follow these steps to create a new module.
+
+1.  **定义接口 (Define Interface)**: 在 `include/modules/` 目录下为你的新模块创建或修改头文件，定义其接口。
+2.  **实现类 (Implement Class)**: 在 `src/modules/` 目录下创建 `.cpp` 文件，实现接口。确保你的实现类继承了正确的模块接口和 `IModule`。
+3.  **添加构建规则 (Update CMake)**: 将新的源文件和头文件路径添加到 `src/CMakeLists.txt` 中，确保它被编译进 `radar_modules` 静态库。
+4.  **集成到应用 (Integrate into Application)**: 在 `src/application/radar_application.cpp` 中，通过 `ConfigManager` 读取新模块的配置，并将其集成到系统生命周期中。
+5.  **编写单元测试 (Write Unit Tests)**: 在 `tests/unit_tests/` 目录下为你的模块添加测试用例。
+
+---
+
+### 6. Coding Style & Conventions (编码风格与约定)
+
+- **Naming Conventions**:
+    - **Namespaces**: `radar::[layer]` (e.g., `radar::common`, `radar::modules`)
+    - **Member Variables**: Use an underscore suffix (e.g., `member_`)
+    - **Interfaces**: Abstract classes start with `I` (e.g., `IModule`)
+    - **Constants**: `ALL_CAPS_UNDERSCORE`
+- **Resource Management**:
+    - Use smart pointers (`std::unique_ptr`, `std::shared_ptr`) for resource ownership.
+    - Factory functions should return smart pointers.
+- **Documentation**:
+    - Use Doxygen-style comments (`@brief`, `@param`, `@return`) for all public headers.
+
+- **Style Guide**:
+    - Follow the Google C++ Style Guide for formatting, naming, includes and header organization. Use a clang-format configuration that matches Google style and apply it to all generated code. Maintain consistency with existing project formatting where it differs only for justified reasons.
+    - (中文补充)：请在项目根目录提供或引用一个 `clang-format` 配置（建议基于 Google 风格），并在 CI 中运行格式检查。
+
+---
+
+### 7. Critical "Do's and Don'ts" (关键注意事项)
+
+- **DO**: Use the project-defined types from `types.h`.
+- **DO**: Return `ErrorCode` for functions that can fail.
+- **DO**: Use the `RADAR_*` logging macros for structured logging.
+- **DON'T**: Use `std::vector` for signal data; use `Aligned...Vector` instead.
+- **DON'T**: Throw exceptions in the main data processing pipeline.
+- **DON'T**: Create monolithic classes. Decompose functionality into smaller, single-responsibility components.
+
+### 8. AI Collaboration Rules — Clarification & Iterative Delivery (AI 协作规则 — 澄清与迭代交付)
+
+- Purpose:
+    Provide clear rules for Copilot/AI behavior when generating code for this repository so suggestions are high-quality, non-invasive, and safe to integrate.
+
+- Rules:
+    - Intent clarification: When the agent is uncertain about requirements, design choices, or missing context, it MUST NOT make unilateral assumptions. Instead the agent should either:
+        1. Ask 1–3 concise clarifying questions, or
+        2. If user interaction is not possible, list up to 5 specific pieces of missing information it needs to proceed (for example: API contract, expected data shapes, error-code ranges, target CUDA compute capability, config YAML keys). Do not proceed until at least one of these items is answered.
+        - (中文补充)：遇到不确定的地方，Copilot 要主动列出最多 5 项必要信息，例如接口签名、数据格式、性能目标、依赖版本、配置键名等。
+
+    - Small-step delivery and automated checks: For large or risky changes, the agent must split the work into small, verifiable steps. After each change it should run or request the following automated checks and report results before continuing:
+        1. Build (CMake configure + build) or at minimum a compilation check for affected files.
+        2. Lint/format check (clang-format or project linter) and basic static analysis where available.
+        3. Unit tests related to the changed module (if present) or a minimal smoke test.
+        - The agent should present the results (PASS/FAIL and key errors) and propose the next small step. Only proceed after fixing failures or after user's explicit approval to continue.
+        - (中文补充)：大改动请拆成小步，且每步完成后运行构建/格式/测试检查，把检查结果反馈给我；只有在检查通过或我批准后再继续下一步。
+
+    - Error reporting and assumptions: When the agent must make temporary, well-scoped assumptions (for example placeholder types or TODOs), it must explicitly mark them with TODO comments and a short rationale, and include a short list of actions required to remove the assumptions.
+        - (中文补充)：临时假设必须用 `// TODO` 标注，并说明原因与后续移除步骤。
+
+- Compliance:
+    - Copilot suggestions should strive to preserve existing public APIs and respect the project's interface-first rules. Any breaking API changes must be highlighted and require explicit approval.
+
+(End of additions)
