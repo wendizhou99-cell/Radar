@@ -146,6 +146,11 @@ radar_mvp/
 
 ## 🔧 开发指南
 
+### AI 开发助手
+- **快速开始**: [5分钟配置Copilot个人指令](docs/02_开发指南/GitHub-Copilot快速设置.md) ⚡
+- **详细指南**: [GitHub Copilot完整配置指南](docs/02_开发指南/GitHub-Copilot个人指令配置指南.md)
+- **项目级指令**: 查看 [.github/copilot-instructions.md](.github/copilot-instructions.md) 了解项目特定AI指令
+
 ### 模块开发流程
 1. **接口定义**: 在 `include/modules/` 中定义模块接口
 2. **实现模块**: 在 `src/modules/` 中实现具体功能
