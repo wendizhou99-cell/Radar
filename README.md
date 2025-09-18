@@ -248,6 +248,7 @@ open docs/html/index.html
 ### 架构文档
 - 详细设计文档请参考 `../docs/01_项目设计/MVP系统设计文档.md`
 - 开发指南请参考 `../docs/02_开发指南/`
+- GitHub Copilot使用指南请参考 `../docs/02_开发指南/GitHub_Copilot个人指令设置指南.md`
 - 技术规范请参考 `../docs/03_技术规范/`
 
 ## 🤝 贡献指南
