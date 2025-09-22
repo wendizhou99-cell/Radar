@@ -1,0 +1,52 @@
+{
+    "name": "radar-mvp",
+    "version": "1.0.0",
+    "description": "GPU加速相控阵雷达数据处理系统",
+    "homepage": "https://github.com/your-org/radar-mvp",
+    "supports": "windows & linux",
+    "dependencies": [
+        {
+            "name": "spdlog",
+            "version>=": "1.11.0"
+        },
+        {
+            "name": "yaml-cpp",
+            "version>=": "0.7.0"
+        },
+        {
+            "name": "gtest",
+            "version>=": "1.13.0"
+        },
+        {
+            "name": "boost-system",
+            "version>=": "1.82.0"
+        },
+        {
+            "name": "boost-filesystem",
+            "version>=": "1.82.0"
+        },
+        {
+            "name": "boost-thread",
+            "version>=": "1.82.0"
+        }
+    ],
+    "features": {
+        "cuda": {
+            "description": "Enable CUDA support",
+            "dependencies": []
+        },
+        "qt": {
+            "description": "Enable Qt GUI support",
+            "dependencies": [
+                {
+                    "name": "qt6-base",
+                    "version>=": "6.5.0"
+                },
+                {
+                    "name": "qt6-charts",
+                    "version>=": "6.5.0"
+                }
+            ]
+        }
+    }
+}

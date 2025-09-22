@@ -9,6 +9,11 @@ radar_mvp/Testing/
 **/InstallScripts.json
 **/CMakeConfigureLog.yaml
 
+# vcpkg specific
+vcpkg_installed/
+.vcpkg-root
+vcpkg-manifest-install.log
+
 # IDE directories
 .vscode/
 radar_mvp/.vscode/
@@ -33,48 +38,6 @@ radar_mvp/logs/
 radar_mvp/test.yaml
 radar_mvp/test_configs/
 
-# Third-party library specific exclusions (keep essential files only)
-# We will include the core library headers and sources, but exclude:
-# - Test files and examples
-# - Documentation and readme files (except essential ones)
-# - Build artifacts and generated files
-
-# GoogleTest exclusions
-radar_mvp/third_party/googletest/googlemock/test/
-radar_mvp/third_party/googletest/googletest/test/
-radar_mvp/third_party/googletest/googletest/samples/
-radar_mvp/third_party/googletest/**/*_test.cc
-radar_mvp/third_party/googletest/**/*_unittest.cc
-radar_mvp/third_party/googletest/**/BUILD*
-radar_mvp/third_party/googletest/**/WORKSPACE*
-radar_mvp/third_party/googletest/**/*.md
-radar_mvp/third_party/googletest/**/*.txt
-radar_mvp/third_party/googletest/**/.git*
-
-# SPDLog exclusions
-radar_mvp/third_party/spdlog/example/
-radar_mvp/third_party/spdlog/tests/
-radar_mvp/third_party/spdlog/bench/
-radar_mvp/third_party/spdlog/**/*.md
-radar_mvp/third_party/spdlog/**/BUILD*
-radar_mvp/third_party/spdlog/**/WORKSPACE*
-radar_mvp/third_party/spdlog/**/.git*
-
-# YAML-CPP exclusions
-radar_mvp/third_party/yaml-cpp/test/
-radar_mvp/third_party/yaml-cpp/util/
-radar_mvp/third_party/yaml-cpp/**/*_test.cpp
-radar_mvp/third_party/yaml-cpp/**/*.md
-radar_mvp/third_party/yaml-cpp/**/BUILD*
-radar_mvp/third_party/yaml-cpp/**/WORKSPACE*
-radar_mvp/third_party/yaml-cpp/**/.git*
-
-# Other common exclusions
-**/.DS_Store
-**/Thumbs.db
-**/*.swp
-**/*.swo
-
 # System files
 .DS_Store
 Thumbs.db
@@ -82,7 +45,6 @@ Thumbs.db
 # 项目特定
 config/local_config.yaml
 data/test_data/large_files/
-third_party/downloads/
 
 # 私人文档 (不上传到团队仓库)
 docs_private/
@@ -99,3 +61,6 @@ docs_private/
 *.map
 callgrind.out.*
 perf.data*
+
+# 移除旧的第三方库目录（现在用vcpkg管理）
+radar_mvp/third_party/

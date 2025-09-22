@@ -1,46 +1,35 @@
 
 # 基于GPU的相控阵雷达数据处理系统 - 最小可行系统 (MVP) 设计文档
 
----
-```txt
-radar_mvp/
-├── CMakeLists.txt
-├── README.md
-├── third_party/                    # <-- 新增：管理所有第三方开源库
-│   ├── CMakeLists.txt              # <-- 新增：用于统一添加所有第三方库
-│   ├── spdlog/                     # <-- 示例：日志库 (Git Submodule)
-│   ├── yaml-cpp/                   # <-- 示例：配置解析库 (Git Submodule)
-│   └── googletest/                 # <-- 示例：测试框架 (Git Submodule)
-│
-├── configs/
-│   └── config.yaml                 # 统一的配置文件
-│
-├── include/
-│   ├── common/                     # 核心数据结构和接口
-│   │   ├── types.h
-│   │   ├── error_codes.h
-│   │   └── interfaces.h
-│   └── modules/                    # 各模块头文件
-│       ├── data_receiver.h
-│       ├── data_processor.h
-│       ├── task_scheduler.h
-│       └── display_controller.h
-│
-├── src/
-│   ├── modules/                    # 模块实现
-│   │   ├── data_receiver.cpp
-│   │   ├── data_processor.cpp
-│   │   ├── task_scheduler.cpp
-│   │   └── display_controller.cpp
-│   ├── application/                # 应用层，负责组装和启动
-│   │   └── radar_application.cpp
-│   └── main.cpp                    # 主程序入口
-│
-└── tests/
-    ├── unit_tests/                 # 单元测试
-    └── integration_tests/          # 集成测试
-```
+- **标题**: 基于GPU的相控阵雷达数据处理系统 - 最小可行系统 (MVP) 设计文档
+- **当前版本**: v1.1.0
+- **最后更新**: 2025-09-22
+- **负责人**: Kelin
 
+---
+
+## 概述
+
+本文档定义了基于GPU的相控阵雷达数据处理系统的最小可行产品（MVP）设计方案，重点验证系统架构的可行性，建立统一的技术基础，并为团队成员提供一致的系统理解和开发标准。文档专注于MVP阶段的核心功能实现，包括数据流转验证、任务调度机制、线程管理策略和模块接口定义。
+
+---
+
+## 快速导航
+
+- [引言](#引言)
+- [系统概述](#系统概述)
+- [核心设计原则](#核心设计原则)
+- [目录结构与组织](#目录结构与组织)
+- [核心模块设计](#核心模块设计)
+- [数据流设计](#数据流设计)
+- [任务调度与线程管理](#任务调度与线程管理)
+- [技术选型](#技术选型)
+- [非功能需求](#非功能需求)
+- [风险和挑战](#风险和挑战)
+- [下一步计划](#下一步计划)
+- [附录](#附录)
+
+---
 
 ## 1. 引言
 
@@ -133,77 +122,160 @@ radar_mvp/
 
 ## 2. 系统概述
 
-### 2.1 系统架构层次图
+### 2.1 系统架构总览
 
-本系统架构设计分为两个层次视图：**原理性流程架构**和**代码接口架构**，分别从不同角度展示系统的组织结构和交互关系。
+本系统采用分层模块化架构，通过详细的组件架构与通信机制图展示了数据流向、线程调度关系和系统的核心处理流程，重点关注**数据如何在系统中流转**、**调度器如何协调各模块**以及**并发设计模式的实现**。
 
-#### 2.1.1 原理性流程架构图
+#### 2.1.1 详细组件架构与通信机制图
 
-该架构图展示了数据流向、线程调度关系和系统的核心处理流程，重点关注**数据如何在系统中流转**以及**调度器如何协调各模块**。
+该图详细展示了每个模块的内部组件、模块间的通信机制（缓冲区、队列）、数据流/控制流的具体实现以及线程和任务调度的并发设计模式：
 
 ```mermaid
 flowchart TB
-    subgraph "外部环境 (External Environment)"
+    subgraph "外部环境"
         RADAR[雷达阵面<br/>Radar Array]
         USER[用户界面<br/>User Interface]
     end
 
-    subgraph "MVP核心系统 (MVP Core System)"
-        subgraph "调度控制层 (Scheduling Layer)"
-            SCHEDULER[任务调度器<br/>Task Scheduler]
-            THREAD_POOL[线程池<br/>Thread Pool]
+    subgraph "雷达数据处理系统详细架构"
+
+        subgraph "数据接收模块 (DataReceiver)"
+            DR_UDP[UDP监听器<br/>UDP Listener]
+            DR_PARSER[数据包解析器<br/>Packet Parser]
+            DR_VALIDATOR[数据验证器<br/>Data Validator]
         end
 
-        subgraph "数据处理流水线 (Data Processing Pipeline)"
-            RECEIVER[数据接收模块<br/>Data Receiver]
-            PROCESSOR[数据处理模块<br/>Data Processor]
-            VISUALIZER[数据可视化模块<br/>Data Visualizer]
+        subgraph "通信缓冲区层"
+            BUFFER_A[(环形缓冲区A<br/>Ring Buffer A<br/>原始数据)]
+            BUFFER_B[(环形缓冲区B<br/>Ring Buffer B<br/>处理数据)]
+            CMD_QUEUE[(命令队列<br/>Command Queue<br/>控制命令)]
         end
 
-        subgraph "支撑服务层 (Support Services)"
-            CONFIG_MGR[配置管理器<br/>Config Manager]
-            MONITOR[监控服务<br/>Monitor Service]
+        subgraph "信号处理模块 (SignalProcessor)"
+            SP_READER[数据读取器<br/>Data Reader]
+            SP_ALGORITHM[信号处理算法<br/>Signal Algorithm]
+            SP_GPU[GPU计算单元<br/>GPU Compute Unit]
         end
 
-        subgraph "数据队列 (Data Queues)"
-            RAW_QUEUE[(原始数据队列<br/>Raw Data Queue)]
-            PROCESSED_QUEUE[(处理数据队列<br/>Processed Data Queue)]
+        subgraph "数据处理模块 (DataProcessor)"
+            DP_READER[数据读取器<br/>Data Reader]
+            DP_CFAR[CFAR检测器<br/>CFAR Detector]
+            DP_TRACKER[航迹关联器<br/>Track Correlator]
+        end
+
+        subgraph "显示控制模块 (DisplayController)"
+            DC_READER[数据读取器<br/>Data Reader]
+            DC_RENDERER[图形渲染器<br/>Graphics Renderer]
+            DC_UI[用户交互处理<br/>UI Handler]
+        end
+
+        subgraph "命令发送模块 (CommandSender)"
+            CS_PROCESSOR[命令处理器<br/>Command Processor]
+            CS_SENDER[网络发送器<br/>Network Sender]
+        end
+
+        subgraph "任务调度器 (TaskScheduler)"
+            TS_MANAGER[生命周期管理器<br/>Lifecycle Manager]
+            TS_MONITOR[状态监控器<br/>Status Monitor]
+            TS_RESOURCE[资源分配器<br/>Resource Allocator]
+        end
+
+        subgraph "线程池管理 (Thread Pool Management)"
+            RECEIVER_THREAD[接收线程<br/>I/O密集型]
+            SIGNAL_THREAD_POOL[信号处理线程池<br/>计算密集型]
+            ALGORITHM_THREAD[算法处理线程<br/>串行处理]
+            UI_THREAD[GUI主线程<br/>界面更新]
+            CMD_THREAD[命令线程<br/>控制流处理]
         end
     end
 
-    %% 数据流向
-    RADAR -->|UDP数据包<br/>UDP Packets| RECEIVER
-    RECEIVER -->|原始数据<br/>Raw Data| RAW_QUEUE
-    RAW_QUEUE -->|缓存数据<br/>Buffered Data| PROCESSOR
-    PROCESSOR -->|处理结果<br/>Processed Data| PROCESSED_QUEUE
-    PROCESSED_QUEUE -->|显示数据<br/>Display Data| VISUALIZER
-    VISUALIZER -->|可视化输出<br/>Visual Output| USER
+    %% 数据流 (下行流 - 高吞吐)
+    RADAR -->|UDP数据包| DR_UDP
+    DR_UDP --> DR_PARSER
+    DR_PARSER --> DR_VALIDATOR
+    DR_VALIDATOR -->|原始数据帧| BUFFER_A
 
-    %% 调度控制关系
-    SCHEDULER -.->|生命周期管理<br/>Lifecycle Control| RECEIVER
-    SCHEDULER -.->|任务分配<br/>Task Assignment| PROCESSOR
-    SCHEDULER -.->|状态协调<br/>State Coordination| VISUALIZER
-    THREAD_POOL -.->|线程资源<br/>Thread Resources| PROCESSOR
+    BUFFER_A -->|缓存数据| SP_READER
+    SP_READER --> SP_ALGORITHM
+    SP_ALGORITHM --> SP_GPU
+    SP_GPU -->|处理结果| BUFFER_B
 
-    %% 配置和监控
-    CONFIG_MGR -.->|配置参数<br/>Configuration| RECEIVER
-    CONFIG_MGR -.->|配置参数<br/>Configuration| PROCESSOR
-    CONFIG_MGR -.->|配置参数<br/>Configuration| VISUALIZER
-    MONITOR -.->|性能监控<br/>Performance Monitoring| RECEIVER
-    MONITOR -.->|性能监控<br/>Performance Monitoring| PROCESSOR
-    MONITOR -.->|性能监控<br/>Performance Monitoring| VISUALIZER
+    BUFFER_B -->|处理数据| DP_READER
+    DP_READER --> DP_CFAR
+    DP_CFAR --> DP_TRACKER
+    DP_TRACKER -->|目标列表| DC_READER
 
-    %% 应用全局样式
-    classDef base fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
-    classDef core fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
-    classDef app fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
-    classDef adv fill:#f8bbd9,stroke:#c2185b,stroke-width:2px
+    DC_READER --> DC_RENDERER
+    DC_RENDERER --> DC_UI
+    DC_UI -->|可视化输出| USER
 
-    class RADAR,USER base
-    class SCHEDULER,THREAD_POOL,CONFIG_MGR,MONITOR core
-    class RECEIVER,PROCESSOR,VISUALIZER app
-    class RAW_QUEUE,PROCESSED_QUEUE adv
+    %% 控制流 (上行流 - 低延迟高优先级)
+    USER -->|用户操作| DC_UI
+    DC_UI -->|控制命令| CMD_QUEUE
+    CMD_QUEUE -->|命令数据| CS_PROCESSOR
+    CS_PROCESSOR --> CS_SENDER
+    CS_SENDER -->|控制参数| RADAR
+
+    %% 调度控制关系 (虚线表示管理关系)
+    TS_MANAGER -.->|生命周期管理| DR_UDP
+    TS_MANAGER -.->|任务分配| SP_ALGORITHM
+    TS_MANAGER -.->|状态协调| DP_CFAR
+    TS_MANAGER -.->|显示控制| DC_RENDERER
+    TS_MONITOR -.->|性能监控| BUFFER_A
+    TS_MONITOR -.->|性能监控| BUFFER_B
+    TS_RESOURCE -.->|资源分配| SP_GPU
+
+    %% 线程调度关系
+    RECEIVER_THREAD -.->|执行| DR_UDP
+    SIGNAL_THREAD_POOL -.->|并行执行| SP_ALGORITHM
+    ALGORITHM_THREAD -.->|串行执行| DP_CFAR
+    UI_THREAD -.->|界面更新| DC_RENDERER
+    CMD_THREAD -.->|命令处理| CS_PROCESSOR
+
+    %% 并发同步机制
+    BUFFER_A -.->|生产者-消费者| SIGNAL_THREAD_POOL
+    BUFFER_B -.->|生产者-消费者| ALGORITHM_THREAD
+    CMD_QUEUE -.->|高优先级队列| CMD_THREAD
+
+    %% 样式定义
+    classDef external fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef receiver fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef buffer fill:#fff3e0,stroke:#ef6c00,stroke-width:3px
+    classDef processor fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef display fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef scheduler fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+    classDef threads fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+
+    class RADAR,USER external
+    class DR_UDP,DR_PARSER,DR_VALIDATOR receiver
+    class BUFFER_A,BUFFER_B,CMD_QUEUE buffer
+    class SP_READER,SP_ALGORITHM,SP_GPU,DP_READER,DP_CFAR,DP_TRACKER processor
+    class DC_READER,DC_RENDERER,DC_UI,CS_PROCESSOR,CS_SENDER display
+    class TS_MANAGER,TS_MONITOR,TS_RESOURCE scheduler
+    class RECEIVER_THREAD,SIGNAL_THREAD_POOL,ALGORITHM_THREAD,UI_THREAD,CMD_THREAD threads
 ```
+
+**关键并发设计模式说明**：
+
+1. **生产者-消费者模式**：
+   - **环形缓冲区A**：数据接收线程（生产者）→ 信号处理线程池（多消费者）
+   - **环形缓冲区B**：信号处理线程池（多生产者）→ 算法处理线程（单消费者）
+   - **优势**：解耦模块、平滑流量波动、支持并行处理
+
+2. **线程池模式**：
+   - **信号处理线程池**：处理可并行的信号算法，充分利用多核CPU
+   - **工作窃取算法**：线程池中的工作线程竞争获取任务，自然实现负载均衡
+   - **GPU资源池**：管理GPU计算资源，避免资源竞争
+
+3. **优先级调度模式**：
+   - **命令队列**：高优先级、低延迟的控制命令通道
+   - **与数据流隔离**：避免控制命令被阻塞在数据处理流程中
+   - **抢占式调度**：关键控制命令可以抢占当前执行的低优先级任务
+
+4. **管道-过滤器模式**：
+   - **数据处理管道**：数据接收 → 信号处理 → 算法处理 → 显示输出
+   - **阶段性处理**：每个阶段独立处理，便于调试和优化
+   - **流水线并行**：不同阶段可以并行处理不同批次的数据
 
 #### 2.1.2 模块接口调用架构图
 
@@ -423,539 +495,523 @@ flowchart LR
     class CONFIG,MONITOR,LOG service
 ```
 
-### 2.2 主要模块说明
+### 2.2 主要模块说明与并发设计
 
-基于上述架构图，以下详细说明各核心模块的功能职责和交互关系：
+基于上述详细架构图，以下详细说明各核心模块的功能职责、交互关系以及并发设计模式的实现：
 
-#### 2.2.1 数据接收模块 (DataReceiver)
+#### 2.2.1 数据接收模块 (DataReceiver) - I/O密集型线程模式
 
-**核心职责**：
-- 从雷达阵面接收UDP数据包
-- 验证数据包的完整性和有效性
-- 将原始数据放入数据队列供后续处理
+**核心职责与并发设计**：
+- 从雷达阵面接收UDP数据包，采用**单线程异步I/O模式**
+- 验证数据包的完整性和有效性，使用**流水线验证机制**
+- 将原始数据放入环形缓冲区，实现**高效的生产者模式**
 
-**模块内部架构**：
+**线程模型与调度策略**：
 ```mermaid
 flowchart LR
-    subgraph "DataReceiver 内部架构"
-        INPUT[UDP数据输入]
-        SOCKET[UDPSocket<br/>套接字管理]
-        VALIDATOR[PacketValidator<br/>数据验证]
-        BUFFER[接收缓冲区]
-        QUEUE[输出队列]
+    subgraph "DataReceiver 并发架构"
+        MAIN_LOOP[主循环<br/>epoll/select监听]
+        PACKET_HANDLER[数据包处理器<br/>快速验证和解析]
+        BUFFER_WRITER[缓冲区写入器<br/>无锁写入操作]
 
-        INPUT --> SOCKET
-        SOCKET --> VALIDATOR
-        VALIDATOR --> BUFFER
-        BUFFER --> QUEUE
-
-        VALIDATOR -.->|验证失败| ERROR[错误处理]
+        MAIN_LOOP -->|异步回调| PACKET_HANDLER
+        PACKET_HANDLER -->|验证通过| BUFFER_WRITER
+        PACKET_HANDLER -.->|验证失败| ERROR_HANDLER[错误处理]
     end
 
-    classDef core fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
-    classDef app fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
-    classDef adv fill:#f8bbd9,stroke:#c2185b,stroke-width:2px
+    classDef io fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef process fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef error fill:#f8bbd9,stroke:#c2185b,stroke-width:2px
 
-    class INPUT,QUEUE core
-    class SOCKET,VALIDATOR,BUFFER app
-    class ERROR adv
+    class MAIN_LOOP,BUFFER_WRITER io
+    class PACKET_HANDLER process
+    class ERROR_HANDLER error
 ```
+
+**关键设计决策**：
+- **单线程设计原因**：I/O密集型任务，多线程并不能提升性能，反而增加同步开销
+- **异步I/O优势**：非阻塞操作，高并发连接处理能力
+- **无锁环形缓冲区**：使用原子操作实现无锁写入，避免锁竞争
 
 **与其他模块的交互**：
 - **被任务调度器调度**：接收启动、停止、状态查询等控制指令
-- **向数据处理模块提供数据**：通过线程安全队列传递原始数据包
+- **向信号处理模块提供数据**：通过线程安全的环形缓冲区传递原始数据包
 - **使用配置管理器**：获取网络配置参数（IP地址、端口等）
 - **调用日志服务**：记录接收状态和错误信息
 
-#### 2.2.2 数据处理模块 (DataProcessor)
+#### 2.2.2 信号处理模块 (SignalProcessor) - 计算密集型线程池模式
 
-**核心职责**：
-- 从数据队列获取原始数据
-- 执行GPU数据处理（MVP阶段为模拟处理）
-- 将处理结果放入输出队列
+**核心职责与并发设计**：
+- 从环形缓冲区A获取原始数据，采用**多消费者竞争模式**
+- 执行可并行的信号处理算法，使用**工作窃取线程池**
+- 将处理结果放入环形缓冲区B，实现**多生产者协作模式**
 
-**数据处理流程图**：
+**线程池架构与负载均衡**：
+```mermaid
+flowchart TB
+    subgraph "SignalProcessor 线程池架构"
+        TASK_QUEUE[任务队列<br/>Work-stealing Queue]
+
+        subgraph "工作线程池"
+            WORKER1[工作线程1<br/>Worker Thread 1]
+            WORKER2[工作线程2<br/>Worker Thread 2]
+            WORKERN[工作线程N<br/>Worker Thread N]
+        end
+
+        GPU_RESOURCE_POOL[GPU资源池<br/>GPU Resource Pool]
+        RESULT_AGGREGATOR[结果聚合器<br/>Result Aggregator]
+
+        TASK_QUEUE -->|竞争获取| WORKER1
+        TASK_QUEUE -->|竞争获取| WORKER2
+        TASK_QUEUE -->|竞争获取| WORKERN
+
+        WORKER1 -->|申请GPU| GPU_RESOURCE_POOL
+        WORKER2 -->|申请GPU| GPU_RESOURCE_POOL
+        WORKERN -->|申请GPU| GPU_RESOURCE_POOL
+
+        WORKER1 -->|处理结果| RESULT_AGGREGATOR
+        WORKER2 -->|处理结果| RESULT_AGGREGATOR
+        WORKERN -->|处理结果| RESULT_AGGREGATOR
+    end
+
+    classDef queue fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef worker fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef resource fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef result fill:#f8bbd9,stroke:#c2185b,stroke-width:2px
+
+    class TASK_QUEUE queue
+    class WORKER1,WORKER2,WORKERN worker
+    class GPU_RESOURCE_POOL resource
+    class RESULT_AGGREGATOR result
+```
+
+**并发优化策略**：
+- **工作窃取算法**：空闲线程可以从其他线程的队列中窃取任务，提高CPU利用率
+- **GPU资源池管理**：统一管理GPU资源，避免资源竞争和死锁
+- **数据局部性优化**：任务分配考虑数据在内存中的位置，提高缓存命中率
+- **批处理优化**：将小任务合并为大任务，减少GPU kernel启动开销
+
+#### 2.2.3 数据处理模块 (DataProcessor) - 串行算法处理模式
+
+**核心职责与并发设计**：
+- 从环形缓冲区B获取信号处理结果，采用**单消费者模式**
+- 执行有时序依赖的算法（CFAR检测、航迹关联），使用**单线程串行处理**
+- 将最终结果通过异步通知发送给显示模块
+
+**算法处理流水线**：
 ```mermaid
 sequenceDiagram
-    participant Queue as 数据队列
-    participant Processor as DataProcessor
-    participant GPU as GPU管理器
-    participant Simulator as 算法模拟器
-    participant OutQueue as 输出队列
+    participant Buffer as 环形缓冲区B
+    participant Reader as 数据读取器
+    participant CFAR as CFAR检测器
+    participant Tracker as 航迹关联器
+    participant Notifier as 异步通知器
+    participant Display as 显示模块
 
-    Note over Queue,OutQueue: 数据处理流程
+    Note over Buffer,Display: 串行算法处理流程
 
-    Queue->>Processor: 1. 获取原始数据
-    Processor->>GPU: 2. 申请GPU资源
-    GPU-->>Processor: 3. 分配GPU内存
+    Buffer->>Reader: 1. 读取处理数据
+    Reader->>CFAR: 2. 执行CFAR检测
+    Note over CFAR: 检测目标，过滤噪声
+    CFAR->>Tracker: 3. 传递检测结果
+    Note over Tracker: 关联航迹，建立轨迹
+    Tracker->>Notifier: 4. 发送最终结果
+    Notifier->>Display: 5. 异步通知更新
+    Note over Display: 更新用户界面
 
-    Processor->>Simulator: 4. 执行模拟算法
-    Note over Simulator: MVP阶段：简单数据变换
-    Simulator-->>Processor: 5. 返回处理结果
-
-    Processor->>GPU: 6. 释放GPU资源
-    Processor->>OutQueue: 7. 输出处理结果
-
-    Note over Queue,OutQueue: 处理完成
+    Note over Buffer,Display: 处理周期完成
 ```
 
-**与其他模块的交互**：
-- **被任务调度器管理**：接收任务分配和资源调度
-- **从数据接收模块获取数据**：通过队列接收原始数据包
-- **向数据可视化模块提供结果**：通过队列传递处理后的数据
-- **使用GPU管理器**：申请和管理GPU计算资源
-- **调用性能监控**：记录处理时间和资源使用情况
+**设计原理说明**：
+- **单线程处理原因**：CFAR检测和航迹关联算法有强时序依赖，并行化复杂且收益有限
+- **流水线设计**：虽然单线程，但可以与其他模块形成流水线并行
+- **异步通知机制**：避免阻塞显示线程，保证界面响应性
 
-#### 2.2.3 数据可视化模块 (DataVisualizer)
+#### 2.2.4 显示控制模块 (DisplayController) - GUI主线程模式
 
-**核心职责**：
-- 从处理队列获取处理后的数据
-- 渲染图表和状态信息
-- 更新用户界面显示
+**核心职责与并发设计**：
+- 运行在GUI主线程中，负责用户界面更新和用户交互
+- 通过异步回调接收处理结果，避免阻塞界面
+- 处理用户输入并生成控制命令
 
-**可视化组件架构**：
+**GUI线程并发模型**：
+```mermaid
+flowchart LR
+    subgraph "DisplayController GUI线程模型"
+        EVENT_LOOP[事件循环<br/>Qt Event Loop]
+        DATA_CALLBACK[数据回调处理<br/>Async Data Handler]
+        UI_UPDATE[界面更新<br/>UI Update]
+        USER_INPUT[用户输入处理<br/>User Input Handler]
+        CMD_GENERATOR[命令生成器<br/>Command Generator]
+
+        EVENT_LOOP -->|数据到达| DATA_CALLBACK
+        DATA_CALLBACK -->|触发更新| UI_UPDATE
+        EVENT_LOOP -->|用户操作| USER_INPUT
+        USER_INPUT -->|生成命令| CMD_GENERATOR
+    end
+
+    classDef event fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef handler fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef ui fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef cmd fill:#f8bbd9,stroke:#c2185b,stroke-width:2px
+
+    class EVENT_LOOP event
+    class DATA_CALLBACK,USER_INPUT handler
+    class UI_UPDATE ui
+    class CMD_GENERATOR cmd
+```
+
+#### 2.2.5 任务调度器 (TaskScheduler) - 系统协调者模式
+
+**核心职责与并发设计**：
+- 管理所有模块的生命周期，采用**状态机模式**
+- 协调模块间的执行顺序，使用**依赖图调度**
+- 分配系统资源和线程，实现**资源池管理**
+
+**多级调度架构**：
 ```mermaid
 flowchart TB
-    subgraph "DataVisualizer 组件架构"
-        INPUT[处理数据输入]
-
-        subgraph "渲染引擎"
-            CHART[ChartRenderer<br/>图表渲染器]
-            STATUS[StatusDisplay<br/>状态显示器]
-            LAYOUT[布局管理器]
+    subgraph "TaskScheduler 多级调度架构"
+        subgraph "第一级：模块生命周期调度"
+            LIFECYCLE_MGR[生命周期管理器]
+            STATE_MACHINE[状态机控制器]
+            DEPENDENCY_GRAPH[依赖图管理器]
         end
 
-        subgraph "显示组件"
-            REALTIME[实时数据图表]
-            SYSTEM[系统状态面板]
-            CONFIG[配置界面]
+        subgraph "第二级：资源调度"
+            CPU_SCHEDULER[CPU调度器]
+            GPU_SCHEDULER[GPU调度器]
+            MEMORY_MANAGER[内存管理器]
         end
 
-        OUTPUT[用户界面输出]
+        subgraph "第三级：性能调度"
+            PERF_MONITOR[性能监控器]
+            LOAD_BALANCER[负载均衡器]
+            ADAPTIVE_TUNER[自适应调优器]
+        end
 
-        INPUT --> CHART
-        INPUT --> STATUS
-        CHART --> LAYOUT
-        STATUS --> LAYOUT
-        LAYOUT --> REALTIME
-        LAYOUT --> SYSTEM
-        LAYOUT --> CONFIG
-        REALTIME --> OUTPUT
-        SYSTEM --> OUTPUT
-        CONFIG --> OUTPUT
+        LIFECYCLE_MGR --> CPU_SCHEDULER
+        STATE_MACHINE --> GPU_SCHEDULER
+        DEPENDENCY_GRAPH --> MEMORY_MANAGER
+
+        CPU_SCHEDULER --> PERF_MONITOR
+        GPU_SCHEDULER --> LOAD_BALANCER
+        MEMORY_MANAGER --> ADAPTIVE_TUNER
     end
 
-    classDef core fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
-    classDef app fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
-    classDef adv fill:#f8bbd9,stroke:#c2185b,stroke-width:2px
+    classDef lifecycle fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef resource fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef performance fill:#fff3e0,stroke:#f57c00,stroke-width:2px
 
-    class INPUT,OUTPUT core
-    class CHART,STATUS,LAYOUT app
-    class REALTIME,SYSTEM,CONFIG adv
+    class LIFECYCLE_MGR,STATE_MACHINE,DEPENDENCY_GRAPH lifecycle
+    class CPU_SCHEDULER,GPU_SCHEDULER,MEMORY_MANAGER resource
+    class PERF_MONITOR,LOAD_BALANCER,ADAPTIVE_TUNER performance
 ```
 
-**与其他模块的交互**：
-- **被任务调度器协调**：接收显示更新指令和状态同步
-- **从数据处理模块获取数据**：通过队列接收处理结果
-- **使用配置管理器**：获取显示参数和界面配置
-- **提供用户交互**：接收用户输入并反馈给系统
+**关键并发设计模式总结**：
 
-#### 2.2.4 任务调度器 (TaskScheduler)
+| 模块                  | 并发模式       | 线程策略    | 同步机制       | 性能特点           |
+| --------------------- | -------------- | ----------- | -------------- | ------------------ |
+| **DataReceiver**      | 单线程异步I/O  | 专用I/O线程 | 无锁环形缓冲区 | 高并发、低延迟     |
+| **SignalProcessor**   | 工作窃取线程池 | 多工作线程  | GPU资源池      | 高吞吐、负载均衡   |
+| **DataProcessor**     | 串行流水线     | 单算法线程  | 异步通知       | 时序保证、简化设计 |
+| **DisplayController** | GUI事件循环    | 主界面线程  | 异步回调       | 界面响应、用户体验 |
+| **TaskScheduler**     | 多级调度       | 管理线程    | 状态同步       | 系统协调、资源优化 |
 
-**核心职责**：
-- 管理所有模块的生命周期
-- 协调模块间的执行顺序
-- 分配系统资源和线程
+### 2.3 核心接口与数据结构设计
 
-**调度器工作流程**：
-```mermaid
-stateDiagram-v2
-    [*] --> 系统初始化
-    系统初始化 --> 配置加载
-    配置加载 --> 模块注册
-    模块注册 --> 依赖检查
-    依赖检查 --> 模块初始化
-    模块初始化 --> 系统运行
+为支持上述模块化架构和并发设计，系统定义了统一的接口规范和数据结构。这些设计遵循现代C++最佳实践，确保类型安全、性能优化和易于维护。
 
-    state 系统运行 {
-        [*] --> 监控状态
-        监控状态 --> 资源分配
-        资源分配 --> 任务调度
-        任务调度 --> 性能监控
-        性能监控 --> 监控状态
+#### 2.3.1 模块接口层次体系
 
-        监控状态 --> 异常处理 : 检测到异常
-        异常处理 --> 模块重启
-        模块重启 --> 监控状态
-    }
+**基础接口定义**：
+```cpp
+// 基础模块接口 - 所有模块必须实现
+class IModule {
+public:
+    virtual ~IModule() = default;
+    virtual ErrorCode Initialize(const Config& config) = 0;
+    virtual ErrorCode Start() = 0;
+    virtual ErrorCode Stop() = 0;
+    virtual ModuleStatus GetStatus() const = 0;
+    virtual std::string GetModuleName() const = 0;
+};
 
-    系统运行 --> 系统关闭 : 接收停止指令
-    系统关闭 --> 模块停止
-    模块停止 --> 资源清理
-    资源清理 --> [*]
+// 可调度模块接口 - 支持任务调度的模块
+class ISchedulable : public IModule {
+public:
+    virtual ErrorCode SetPriority(int priority) = 0;
+    virtual int GetPriority() const = 0;
+    virtual bool CanPreempt() const = 0;
+    virtual void OnResourceAvailable(ResourceType type) = 0;
+};
+
+// 数据源接口 - 生产数据的模块
+template<typename DataType>
+class IDataSource {
+public:
+    virtual ~IDataSource() = default;
+    virtual bool HasData() const = 0;
+    virtual std::optional<DataType> GetData() = 0;
+    virtual void RegisterConsumer(std::weak_ptr<IDataConsumer<DataType>> consumer) = 0;
+    virtual size_t GetQueueSize() const = 0;
+};
+
+// 数据消费者接口 - 消费数据的模块
+template<typename DataType>
+class IDataConsumer {
+public:
+    virtual ~IDataConsumer() = default;
+    virtual void ConsumeData(const DataType& data) = 0;
+    virtual bool CanAcceptData() const = 0;
+    virtual size_t GetCapacity() const = 0;
+};
 ```
 
-**与其他模块的交互**：
-- **管理所有功能模块**：控制数据接收、处理、可视化模块的启停
-- **使用线程管理器**：创建和管理工作线程池
-- **调用资源分配器**：分配CPU、GPU和内存资源
-- **使用性能监控器**：实时监控系统运行状态
-- **与配置管理器协作**：加载和更新系统配置
+**具体实现示例**：
+```cpp
+// 数据接收模块实现
+class DataReceiver : public ISchedulable, public IDataSource<RawDataPacket> {
+private:
+    std::unique_ptr<UDPSocket> socket_;
+    std::unique_ptr<PacketValidator> validator_;
+    LockFreeRingBuffer<RawDataPacket> output_buffer_;
+    std::atomic<bool> running_{false};
 
-#### 2.2.5 关键工具类说明
+public:
+    ErrorCode Initialize(const Config& config) override;
+    ErrorCode Start() override;
+    ErrorCode Stop() override;
 
-**DataQueue (线程安全队列)**：
-- **作用**：在模块间安全传输数据，支持多生产者-多消费者模式
-- **特性**：FIFO队列、线程安全、支持阻塞和非阻塞操作
-- **使用场景**：数据接收→处理、处理→可视化的数据传递
+    // IDataSource implementation
+    bool HasData() const override { return !output_buffer_.empty(); }
+    std::optional<RawDataPacket> GetData() override;
+    void RegisterConsumer(std::weak_ptr<IDataConsumer<RawDataPacket>> consumer) override;
 
-**ConfigLoader (配置加载器)**：
-- **作用**：统一管理系统配置，支持配置热更新
-- **特性**：YAML格式、参数验证、变更通知
-- **使用场景**：系统启动时加载配置、运行时更新参数
-
-**Logger (日志记录器)**：
-- **作用**：提供统一的日志记录服务，支持多级别输出
-- **特性**：异步日志、文件轮转、控制台输出
-- **使用场景**：所有模块的运行状态记录和错误报告
-
-**PerformanceMonitor (性能监控器)**：
-- **作用**：实时监控系统性能，收集关键指标
-- **特性**：CPU/GPU使用率、内存占用、处理延迟统计
-- **使用场景**：系统性能分析、瓶颈识别、资源优化
-
-### 2.3 详细架构设计
-
-基于前面的原理性架构，本节提供更详细的组件设计和线程模型，明确展示系统的模块职责分离、通信机制和并发调度关系。
-
-#### 2.3.1 详细组件架构与通信机制图
-
-该图详细展示了每个模块的内部组件、模块间的通信机制（缓冲区、队列）以及数据流/控制流的具体实现：
-
-```mermaid
-flowchart TB
-    subgraph "外部环境"
-        RADAR[雷达阵面<br/>Radar Array]
-        USER[用户界面<br/>User Interface]
-    end
-
-    subgraph "雷达数据处理系统详细架构"
-
-        subgraph "数据接收模块 (DataReceiver)"
-            DR_UDP[UDP监听器<br/>UDP Listener]
-            DR_PARSER[数据包解析器<br/>Packet Parser]
-            DR_VALIDATOR[数据验证器<br/>Data Validator]
-        end
-
-        subgraph "通信缓冲区层"
-            BUFFER_A[(环形缓冲区A<br/>Ring Buffer A<br/>原始数据)]
-            BUFFER_B[(环形缓冲区B<br/>Ring Buffer B<br/>处理数据)]
-            CMD_QUEUE[(命令队列<br/>Command Queue<br/>控制命令)]
-        end
-
-        subgraph "信号处理模块 (SignalProcessor)"
-            SP_READER[数据读取器<br/>Data Reader]
-            SP_ALGORITHM[信号处理算法<br/>Signal Algorithm]
-            SP_GPU[GPU计算单元<br/>GPU Compute Unit]
-        end
-
-        subgraph "数据处理模块 (DataProcessor)"
-            DP_READER[数据读取器<br/>Data Reader]
-            DP_CFAR[CFAR检测器<br/>CFAR Detector]
-            DP_TRACKER[航迹关联器<br/>Track Correlator]
-        end
-
-        subgraph "显示控制模块 (DisplayController)"
-            DC_READER[数据读取器<br/>Data Reader]
-            DC_RENDERER[图形渲染器<br/>Graphics Renderer]
-            DC_UI[用户交互处理<br/>UI Handler]
-        end
-
-        subgraph "命令发送模块 (CommandSender)"
-            CS_PROCESSOR[命令处理器<br/>Command Processor]
-            CS_SENDER[网络发送器<br/>Network Sender]
-        end
-
-        subgraph "任务调度器 (TaskScheduler)"
-            TS_MANAGER[生命周期管理器<br/>Lifecycle Manager]
-            TS_MONITOR[状态监控器<br/>Status Monitor]
-            TS_RESOURCE[资源分配器<br/>Resource Allocator]
-        end
-    end
-
-    %% 数据流 (下行流 - 高吞吐)
-    RADAR -->|UDP数据包| DR_UDP
-    DR_UDP --> DR_PARSER
-    DR_PARSER --> DR_VALIDATOR
-    DR_VALIDATOR -->|原始数据帧| BUFFER_A
-
-    BUFFER_A -->|缓存数据| SP_READER
-    SP_READER --> SP_ALGORITHM
-    SP_ALGORITHM --> SP_GPU
-    SP_GPU -->|处理结果| BUFFER_B
-
-    BUFFER_B -->|处理数据| DP_READER
-    DP_READER --> DP_CFAR
-    DP_CFAR --> DP_TRACKER
-    DP_TRACKER -->|目标列表| DC_READER
-
-    DC_READER --> DC_RENDERER
-    DC_RENDERER --> DC_UI
-    DC_UI -->|可视化输出| USER
-
-    %% 控制流 (上行流 - 低延迟高优先级)
-    USER -->|用户操作| DC_UI
-    DC_UI -->|控制命令| CMD_QUEUE
-    CMD_QUEUE -->|命令数据| CS_PROCESSOR
-    CS_PROCESSOR --> CS_SENDER
-    CS_SENDER -->|控制参数| RADAR
-
-    %% 调度控制关系 (虚线表示管理关系)
-    TS_MANAGER -.->|生命周期管理| DR_UDP
-    TS_MANAGER -.->|任务分配| SP_ALGORITHM
-    TS_MANAGER -.->|状态协调| DP_CFAR
-    TS_MANAGER -.->|显示控制| DC_RENDERER
-    TS_MONITOR -.->|性能监控| BUFFER_A
-    TS_MONITOR -.->|性能监控| BUFFER_B
-    TS_RESOURCE -.->|资源分配| SP_GPU
-
-    %% 样式定义
-    classDef external fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
-    classDef receiver fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
-    classDef buffer fill:#fff3e0,stroke:#ef6c00,stroke-width:3px
-    classDef processor fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    classDef display fill:#fce4ec,stroke:#c2185b,stroke-width:2px
-    classDef scheduler fill:#f1f8e9,stroke:#689f38,stroke-width:2px
-
-    class RADAR,USER external
-    class DR_UDP,DR_PARSER,DR_VALIDATOR receiver
-    class BUFFER_A,BUFFER_B,CMD_QUEUE buffer
-    class SP_READER,SP_ALGORITHM,SP_GPU,DP_READER,DP_CFAR,DP_TRACKER processor
-    class DC_READER,DC_RENDERER,DC_UI,CS_PROCESSOR,CS_SENDER display
-    class TS_MANAGER,TS_MONITOR,TS_RESOURCE scheduler
+private:
+    void ProcessIncomingData();
+    bool ValidatePacket(const RawDataPacket& packet) const;
+};
 ```
 
-**架构说明**：
+#### 2.3.2 高性能数据结构
 
-1. **数据流设计（生产者-消费者链）**：
-   - **环形缓冲区A**：数据接收模块（生产者）→ 信号处理模块（消费者）
-   - **环形缓冲区B**：信号处理模块（生产者）→ 数据处理模块（消费者）
-   - **优势**：解耦模块、平滑流量波动、支持并行处理
+**线程安全的环形缓冲区**：
+```cpp
+template<typename T, size_t Capacity>
+class LockFreeRingBuffer {
+private:
+    alignas(64) std::array<T, Capacity> buffer_;
+    alignas(64) std::atomic<size_t> head_{0};  // 生产者位置
+    alignas(64) std::atomic<size_t> tail_{0};  // 消费者位置
 
-2. **控制流设计（命令模式）**：
-   - **命令队列**：高优先级、低延迟的控制命令通道
-   - **与数据流隔离**：避免控制命令被阻塞在数据处理流程中
+public:
+    bool try_push(const T& item) {
+        const size_t current_head = head_.load(std::memory_order_relaxed);
+        const size_t next_head = (current_head + 1) % Capacity;
 
-3. **调度关系**：
-   - **生命周期管理**：统一的模块启停控制
-   - **资源分配**：动态的CPU/GPU资源调度
-   - **性能监控**：实时的系统状态监控
+        if (next_head == tail_.load(std::memory_order_acquire)) {
+            return false; // 缓冲区满
+        }
 
-#### 2.3.2 线程模型与并发调度图
+        buffer_[current_head] = item;
+        head_.store(next_head, std::memory_order_release);
+        return true;
+    }
 
-该图展示了系统的线程设计、每个线程的职责以及线程间的同步机制：
+    bool try_pop(T& item) {
+        const size_t current_tail = tail_.load(std::memory_order_relaxed);
+        if (current_tail == head_.load(std::memory_order_acquire)) {
+            return false; // 缓冲区空
+        }
 
-```mermaid
-flowchart TB
-    subgraph "线程模型架构"
+        item = buffer_[current_tail];
+        tail_.store((current_tail + 1) % Capacity, std::memory_order_release);
+        return true;
+    }
 
-        subgraph "数据接收线程 (I/O密集型)"
-            T1[接收线程<br/>Receiver Thread]
-            T1_WORK[UDP监听<br/>数据解析<br/>缓冲区写入]
-        end
+    size_t size() const {
+        const size_t h = head_.load(std::memory_order_acquire);
+        const size_t t = tail_.load(std::memory_order_acquire);
+        return h >= t ? h - t : Capacity - t + h;
+    }
 
-        subgraph "信号处理线程池 (计算密集型)"
-            T2_1[处理线程1<br/>Process Thread 1]
-            T2_2[处理线程2<br/>Process Thread 2]
-            T2_N[处理线程N<br/>Process Thread N]
-            T2_WORK[从缓冲区A读取<br/>GPU计算调度<br/>结果写入缓冲区B]
-        end
-
-        subgraph "数据处理线程 (算法密集型)"
-            T3[处理线程<br/>Algorithm Thread]
-            T3_WORK[CFAR检测<br/>航迹关联<br/>目标输出]
-        end
-
-        subgraph "GUI主线程 (UI更新)"
-            T4[主线程<br/>Main UI Thread]
-            T4_WORK[界面渲染<br/>用户交互<br/>显示更新]
-        end
-
-        subgraph "命令发送线程 (控制流)"
-            T5[命令线程<br/>Command Thread]
-            T5_WORK[命令队列监控<br/>网络发送<br/>参数控制]
-        end
-
-        subgraph "调度管理线程 (系统监控)"
-            T6[调度线程<br/>Scheduler Thread]
-            T6_WORK[生命周期管理<br/>资源分配<br/>状态监控]
-        end
-
-        subgraph "线程同步机制"
-            SYNC_A[缓冲区A同步<br/>Mutex + CondVar]
-            SYNC_B[缓冲区B同步<br/>Mutex + CondVar]
-            SYNC_CMD[命令队列同步<br/>Atomic Queue]
-            SYNC_GPU[GPU资源锁<br/>Resource Mutex]
-        end
-    end
-
-    %% 线程间数据流
-    T1 -->|写入| SYNC_A
-    SYNC_A -->|读取| T2_1
-    SYNC_A -->|读取| T2_2
-    SYNC_A -->|读取| T2_N
-
-    T2_1 -->|写入| SYNC_B
-    T2_2 -->|写入| SYNC_B
-    T2_N -->|写入| SYNC_B
-    SYNC_B -->|读取| T3
-
-    T3 -->|异步通知| T4
-    T4 -->|命令生成| SYNC_CMD
-    SYNC_CMD -->|命令处理| T5
-
-    %% GPU资源竞争
-    T2_1 -.->|申请/释放| SYNC_GPU
-    T2_2 -.->|申请/释放| SYNC_GPU
-    T2_N -.->|申请/释放| SYNC_GPU
-
-    %% 调度管理
-    T6 -.->|管理| T1
-    T6 -.->|管理| T2_1
-    T6 -.->|管理| T3
-    T6 -.->|管理| T4
-    T6 -.->|管理| T5
-
-    %% 样式定义
-    classDef io_thread fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
-    classDef compute_thread fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    classDef ui_thread fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
-    classDef control_thread fill:#fff3e0,stroke:#f57c00,stroke-width:2px
-    classDef sync_mechanism fill:#fce4ec,stroke:#c2185b,stroke-width:3px
-
-    class T1,T1_WORK io_thread
-    class T2_1,T2_2,T2_N,T2_WORK,T3,T3_WORK compute_thread
-    class T4,T4_WORK ui_thread
-    class T5,T5_WORK,T6,T6_WORK control_thread
-    class SYNC_A,SYNC_B,SYNC_CMD,SYNC_GPU sync_mechanism
+    bool empty() const { return head_.load() == tail_.load(); }
+    bool full() const { return ((head_.load() + 1) % Capacity) == tail_.load(); }
+};
 ```
 
-**线程模型说明**：
+**核心数据类型定义**：
+```cpp
+// 原始数据包结构
+struct RawDataPacket {
+    struct Header {
+        uint32_t magic_number;      // 魔术数字，用于验证
+        uint32_t sequence_number;   // 序列号
+        uint16_t packet_size;       // 数据包大小
+        uint16_t checksum;          // 校验和
+        uint64_t timestamp_us;      // 时间戳（微秒）
+        uint8_t  array_id;          // 阵面ID
+        uint8_t  reserved[7];       // 保留字段
+    } __attribute__((packed));
 
-1. **线程职责分离**：
-   - **数据接收线程**：专门处理I/O密集的网络通信，不能被阻塞
-   - **信号处理线程池**：并行处理计算密集的信号算法，充分利用多核CPU
-   - **数据处理线程**：处理有时序依赖的高级算法
-   - **GUI主线程**：专门处理用户界面更新，保证界面响应
-   - **命令发送线程**：独立处理控制命令，保证控制实时性
-   - **调度管理线程**：统一的系统监控和资源管理
+    Header header;
+    AlignedVector<ComplexFloat> iq_data;  // I/Q数据
 
-2. **同步机制设计**：
-   - **环形缓冲区**：使用mutex和条件变量实现线程安全的生产者-消费者模式
-   - **命令队列**：使用无锁原子队列实现高优先级的命令传输
-   - **GPU资源锁**：确保GPU计算资源的互斥访问
-   - **异步通知**：UI线程通过异步机制获取处理结果，避免阻塞
-
-3. **性能优化策略**：
-   - **线程池**：信号处理使用线程池，避免频繁创建销毁线程的开销
-   - **数据局部性**：每个线程尽量处理连续的数据块，提高缓存命中率
-   - **负载均衡**：线程池中的工作线程竞争获取任务，自然实现负载均衡
-
-**关键设计决策**：
-
-| 设计选择           | 理由                         | 潜在问题           | 解决方案             |
-| ------------------ | ---------------------------- | ------------------ | -------------------- |
-| **线程池处理信号** | 信号处理可并行，充分利用多核 | GPU资源竞争        | GPU资源锁+任务批处理 |
-| **单线程数据处理** | CFAR、航迹关联有时序依赖     | 可能成为瓶颈       | 后续可考虑流水线并行 |
-| **独立命令线程**   | 保证控制命令实时响应         | 增加线程管理复杂度 | 使用无锁队列降低开销 |
-| **环形缓冲区**     | 高效的生产者-消费者通信      | 缓冲区大小需要调优 | 配置化缓冲区大小     |
-
-#### 2.3.3 模块接口与数据结构
-
-为支持上述架构，系统定义了统一的接口规范和数据结构：
-
-```mermaid
-classDiagram
-    class IModule {
-        <<interface>>
-        +Initialize(config: Config) ErrorCode
-        +Start() ErrorCode
-        +Stop() ErrorCode
-        +GetStatus() ModuleStatus
+    bool IsValid() const {
+        return header.magic_number == 0xDEADBEEF &&
+               VerifyChecksum() &&
+               !iq_data.empty();
     }
 
-    class IDataSource {
-        <<interface>>
-        +GetData() DataPacket
-        +HasData() bool
-        +RegisterCallback(callback) void
-    }
+private:
+    bool VerifyChecksum() const;
+};
 
-    class IDataProcessor {
-        <<interface>>
-        +ProcessData(input: DataPacket) DataPacket
-        +SetProcessingParams(params) void
-        +GetProcessingStats() ProcessingStats
-    }
+// 处理结果数据结构
+struct ProcessedData {
+    uint64_t timestamp_us;
+    uint32_t source_sequence;
+    ProcessingStatus status;
 
-    class IDataConsumer {
-        <<interface>>
-        +ConsumeData(data: DataPacket) void
-        +SetConsumptionRate(rate) void
-    }
+    // 处理结果
+    AlignedVector<float> filtered_data;      // 滤波数据
+    AlignedVector<ComplexFloat> fft_result;  // FFT结果
+    std::vector<DetectedTarget> targets;     // 检测目标
 
-    class DataReceiver {
-        -udpSocket: UDPSocket
-        -packetValidator: PacketValidator
-        -outputBuffer: RingBuffer
-        +Initialize(config) ErrorCode
-        +Start() ErrorCode
-        +Stop() ErrorCode
-    }
+    // 性能统计
+    ProcessingMetrics metrics;
+    QualityIndicators quality;
+};
 
-    class SignalProcessor {
-        -inputBuffer: RingBuffer
-        -outputBuffer: RingBuffer
-        -gpuManager: GPUManager
-        -threadPool: ThreadPool
-        +ProcessData(input) DataPacket
-    }
+// GPU对齐的向量类型
+template<typename T>
+using AlignedVector = std::vector<T, AlignedAllocator<T, 32>>;
 
-    class DataProcessor {
-        -cfarDetector: CFARDetector
-        -trackCorrelator: TrackCorrelator
-        +ProcessData(input) DataPacket
-    }
-
-    class DisplayController {
-        -renderer: GraphicsRenderer
-        -uiHandler: UIHandler
-        +ConsumeData(data) void
-        +HandleUserInput(event) void
-    }
-
-    IModule <|-- DataReceiver
-    IModule <|-- SignalProcessor
-    IModule <|-- DataProcessor
-    IModule <|-- DisplayController
-
-    IDataSource <|-- DataReceiver
-    IDataProcessor <|-- SignalProcessor
-    IDataProcessor <|-- DataProcessor
-    IDataConsumer <|-- DisplayController
-
-    DataReceiver --> SignalProcessor : RingBuffer A
-    SignalProcessor --> DataProcessor : RingBuffer B
-    DataProcessor --> DisplayController : Async Notification
+// 复数类型定义
+using ComplexFloat = std::complex<float>;
+using ComplexDouble = std::complex<double>;
 ```
 
-这个详细的架构设计为您提供了：
-1. **明确的模块职责分离**：每个组件都有清晰的单一职责
-2. **具体的通信机制**：通过缓冲区和队列实现解耦的模块通信
-3. **完整的线程模型**：支持高并发和实时处理的线程架构
-4. **标准化的接口设计**：便于模块的独立开发和测试
+#### 2.3.3 工厂模式与依赖注入
 
-基于这个架构，您可以开始具体的模块实现，每个模块都有明确的接口契约和性能目标。
+**模块工厂设计**：
+```cpp
+class ModuleFactory {
+public:
+    template<typename ModuleType, typename... Args>
+    static std::unique_ptr<ModuleType> CreateModule(const std::string& name, Args&&... args) {
+        auto module = std::make_unique<ModuleType>(std::forward<Args>(args)...);
+        RegisterModule(name, module.get());
+        return module;
+    }
+
+    static IModule* GetModule(const std::string& name) {
+        auto it = module_registry_.find(name);
+        return it != module_registry_.end() ? it->second : nullptr;
+    }
+
+private:
+    static std::unordered_map<std::string, IModule*> module_registry_;
+    static void RegisterModule(const std::string& name, IModule* module);
+};
+
+// 依赖注入容器
+class DependencyContainer {
+public:
+    template<typename Interface, typename Implementation>
+    void RegisterSingleton() {
+        auto instance = std::make_shared<Implementation>();
+        singletons_[typeid(Interface).name()] = instance;
+    }
+
+    template<typename Interface>
+    std::shared_ptr<Interface> Resolve() {
+        const auto& type_name = typeid(Interface).name();
+        auto it = singletons_.find(type_name);
+        if (it != singletons_.end()) {
+            return std::static_pointer_cast<Interface>(it->second);
+        }
+        return nullptr;
+    }
+
+private:
+    std::unordered_map<std::string, std::shared_ptr<void>> singletons_;
+};
+```
+
+#### 2.3.4 错误处理与结果类型
+
+**错误代码和结果包装**：
+```cpp
+// 错误代码枚举
+enum class ErrorCode : int {
+    SUCCESS = 0,
+
+    // 系统级错误 (1-99)
+    SYSTEM_ERROR = 1,
+    MEMORY_ALLOCATION_FAILED = 2,
+    THREAD_CREATION_FAILED = 3,
+
+    // 网络错误 (100-199)
+    NETWORK_ERROR = 100,
+    UDP_SOCKET_ERROR = 101,
+    PACKET_VALIDATION_FAILED = 102,
+
+    // GPU错误 (200-299)
+    GPU_ERROR = 200,
+    CUDA_INITIALIZATION_FAILED = 201,
+    GPU_MEMORY_ALLOCATION_FAILED = 202,
+
+    // 模块错误 (300-399)
+    MODULE_ERROR = 300,
+    MODULE_INITIALIZATION_FAILED = 301,
+    MODULE_START_FAILED = 302
+};
+
+// 结果包装类型
+template<typename T>
+class Result {
+private:
+    std::variant<T, ErrorCode> data_;
+
+public:
+    explicit Result(T&& value) : data_(std::move(value)) {}
+    explicit Result(ErrorCode error) : data_(error) {}
+
+    bool IsSuccess() const { return std::holds_alternative<T>(data_); }
+    bool IsError() const { return std::holds_alternative<ErrorCode>(data_); }
+
+    const T& Value() const {
+        if (!IsSuccess()) throw std::runtime_error("Accessing value of failed result");
+        return std::get<T>(data_);
+    }
+
+    ErrorCode Error() const {
+        if (!IsError()) throw std::runtime_error("Accessing error of successful result");
+        return std::get<ErrorCode>(data_);
+    }
+
+    // 支持函数式编程风格
+    template<typename F>
+    auto Map(F&& func) -> Result<std::invoke_result_t<F, T>> {
+        if (IsSuccess()) {
+            return Result<std::invoke_result_t<F, T>>(func(Value()));
+        } else {
+            return Result<std::invoke_result_t<F, T>>(Error());
+        }
+    }
+};
+```
+
+这种接口和数据结构设计具有以下优势：
+
+**类型安全**：使用模板和强类型确保编译时类型检查
+**性能优化**：内存对齐、无锁数据结构、零拷贝设计
+**可维护性**：清晰的接口分离、依赖注入、错误处理
+**可扩展性**：工厂模式、模板设计、函数式编程风格
+
+---
 
 ## 3. 核心设计原则
 
@@ -1170,105 +1226,397 @@ flowchart TB
 - **质量指标**：数据完整性、处理准确性、系统可用性
 - **业务指标**：数据包接收率、处理成功率、错误率
 
-#### 3.2.5 扩展友好原则
+#### 3.2.6 并行设计模式原则
 
-**扩展机制设计**：
+**并行架构选择策略**：
+针对雷达数据处理系统的特点，本系统采用多种并行设计模式的组合，以最大化系统性能和可维护性。
+
 ```mermaid
-graph LR
-    subgraph "扩展友好设计"
-        direction LR
+flowchart TB
+    subgraph "并行设计模式决策树"
+        direction TB
 
-        subgraph "当前MVP"
-            MVP_CORE[核心功能]
-            MVP_INTERFACE[标准接口]
-            MVP_CONFIG[配置框架]
+        subgraph "数据特性分析"
+            DATA_SIZE[数据规模分析<br/>大批量 vs 小批量]
+            DATA_DEPENDENCY[依赖关系分析<br/>独立 vs 有依赖]
+            DATA_PATTERN[访问模式分析<br/>顺序 vs 随机]
         end
 
-        subgraph "扩展机制"
-            PLUGIN[插件接口]
-            FACTORY[工厂模式]
-            REGISTRY[组件注册]
+        subgraph "计算特性分析"
+            COMPUTE_TYPE[计算类型<br/>CPU密集 vs I/O密集]
+            ALGORITHM_NATURE[算法特性<br/>可并行 vs 串行]
+            RESOURCE_REQUIREMENT[资源需求<br/>内存 vs 计算]
         end
 
-        subgraph "未来扩展"
-            EXT_ALG[算法扩展]
-            EXT_UI[界面扩展]
-            EXT_DATA[数据源扩展]
+        subgraph "并行模式选择"
+            TASK_PARALLEL[任务并行<br/>Task Parallelism]
+            DATA_PARALLEL[数据并行<br/>Data Parallelism]
+            PIPELINE_PARALLEL[流水线并行<br/>Pipeline Parallelism]
+            HYBRID_PARALLEL[混合并行<br/>Hybrid Parallelism]
         end
 
-        MVP_CORE --> PLUGIN
-        MVP_INTERFACE --> FACTORY
-        MVP_CONFIG --> REGISTRY
+        subgraph "质量评估"
+            PERFORMANCE_TARGET[性能目标<br/>延迟 vs 吞吐量]
+            SCALABILITY_TARGET[可扩展性<br/>水平 vs 垂直]
+            MAINTAINABILITY[可维护性<br/>复杂度 vs 性能]
+        end
 
-        PLUGIN --> EXT_ALG
-        FACTORY --> EXT_UI
-        REGISTRY --> EXT_DATA
+        %% 决策流程
+        DATA_SIZE --> TASK_PARALLEL
+        DATA_DEPENDENCY --> DATA_PARALLEL
+        DATA_PATTERN --> PIPELINE_PARALLEL
+
+        COMPUTE_TYPE --> TASK_PARALLEL
+        ALGORITHM_NATURE --> DATA_PARALLEL
+        RESOURCE_REQUIREMENT --> PIPELINE_PARALLEL
+
+        TASK_PARALLEL --> PERFORMANCE_TARGET
+        DATA_PARALLEL --> SCALABILITY_TARGET
+        PIPELINE_PARALLEL --> MAINTAINABILITY
+        HYBRID_PARALLEL --> MAINTAINABILITY
     end
 
-    classDef mvp fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
-    classDef ext fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
-    classDef future fill:#f8bbd9,stroke:#c2185b,stroke-width:2px
+    classDef analysis fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef pattern fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef quality fill:#fff3e0,stroke:#f57c00,stroke-width:2px
 
-    class MVP_CORE,MVP_INTERFACE,MVP_CONFIG mvp
-    class PLUGIN,FACTORY,REGISTRY ext
-    class EXT_ALG,EXT_UI,EXT_DATA future
+    class DATA_SIZE,DATA_DEPENDENCY,DATA_PATTERN,COMPUTE_TYPE,ALGORITHM_NATURE,RESOURCE_REQUIREMENT analysis
+    class TASK_PARALLEL,DATA_PARALLEL,PIPELINE_PARALLEL,HYBRID_PARALLEL pattern
+    class PERFORMANCE_TARGET,SCALABILITY_TARGET,MAINTAINABILITY quality
 ```
 
-**扩展实现策略**：
-- **插件化架构**：定义标准插件接口，支持动态加载
-- **配置驱动**：通过配置文件控制功能开关和参数调整
-- **版本兼容**：保持向后兼容的接口设计
-- **模块热替换**：支持运行时模块更新和替换
+**具体模式应用与决策rationale**：
+
+| 模块/组件             | 并行模式            | 选择理由                  | 性能特点           | 适用场景     |
+| --------------------- | ------------------- | ------------------------- | ------------------ | ------------ |
+| **DataReceiver**      | I/O复用 + 单线程    | I/O密集型，网络延迟是瓶颈 | 低延迟，高并发连接 | 网络数据接收 |
+| **SignalProcessor**   | 数据并行 + 任务并行 | 算法可并行，数据独立性好  | 高吞吐量，CPU密集  | 信号处理算法 |
+| **DataProcessor**     | 流水线并行          | 算法间有依赖，但可流水线  | 平衡延迟和吞吐量   | 串行算法处理 |
+| **DisplayController** | 事件驱动 + 异步更新 | UI响应性要求高            | 低延迟响应         | 用户界面更新 |
+| **TaskScheduler**     | 生产者-消费者       | 任务管理和资源调度        | 系统协调性         | 系统管理     |
+
+**设计评估的决策流程**：
+
+```mermaid
+flowchart LR
+    subgraph "并行设计评估流程"
+        direction LR
+
+        subgraph "第一阶段：平台适配评估"
+            PLATFORM_CHECK{是否适配目标平台？}
+            CPU_CORES[CPU核心数量]
+            GPU_CAPABILITY[GPU计算能力]
+            MEMORY_BANDWIDTH[内存带宽]
+        end
+
+        subgraph "第二阶段：质量要求验证"
+            QUALITY_CHECK{是否满足质量要求？}
+            LATENCY_TARGET[延迟目标]
+            THROUGHPUT_TARGET[吞吐量目标]
+            RESOURCE_UTILIZATION[资源利用率]
+        end
+
+        subgraph "第三阶段：发展适应性评估"
+            EVOLUTION_CHECK{是否适合下一阶段？}
+            ALGORITHM_COMPLEXITY[算法复杂度增长]
+            DATA_SCALE[数据规模扩展]
+            FEATURE_EXTENSION[功能扩展需求]
+        end
+
+        subgraph "调整策略"
+            ADJUST_DATA_DIST[调整数据分布]
+            ADJUST_TASK_DECOMP[调整任务分解]
+            OPTIMIZE_LOAD_BALANCE[优化负载均衡]
+            REDUCE_SYNC_OVERHEAD[减少同步开销]
+            CHANGE_PATTERN[重新选择算法结构模式]
+        end
+
+        %% 决策流程
+        PLATFORM_CHECK -->|否| ADJUST_DATA_DIST
+        PLATFORM_CHECK -->|否| ADJUST_TASK_DECOMP
+        PLATFORM_CHECK -->|是| QUALITY_CHECK
+
+        QUALITY_CHECK -->|否| OPTIMIZE_LOAD_BALANCE
+        QUALITY_CHECK -->|否| REDUCE_SYNC_OVERHEAD
+        QUALITY_CHECK -->|是| EVOLUTION_CHECK
+
+        EVOLUTION_CHECK -->|否| CHANGE_PATTERN
+        EVOLUTION_CHECK -->|是| SUCCESS[设计方案确认]
+
+        %% 调整后重新评估
+        ADJUST_DATA_DIST -.->|重新评估| PLATFORM_CHECK
+        ADJUST_TASK_DECOMP -.->|重新评估| PLATFORM_CHECK
+        OPTIMIZE_LOAD_BALANCE -.->|重新评估| QUALITY_CHECK
+        REDUCE_SYNC_OVERHEAD -.->|重新评估| QUALITY_CHECK
+        CHANGE_PATTERN -.->|重新评估| PLATFORM_CHECK
+    end
+
+    classDef check fill:#ffebee,stroke:#c62828,stroke-width:2px
+    classDef adjust fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    classDef success fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+
+    class PLATFORM_CHECK,QUALITY_CHECK,EVOLUTION_CHECK check
+    class ADJUST_DATA_DIST,ADJUST_TASK_DECOMP,OPTIMIZE_LOAD_BALANCE,REDUCE_SYNC_OVERHEAD,CHANGE_PATTERN adjust
+    class SUCCESS success
+```
+
+**关键决策准则总结**：
+
+1. **平台适配性评估**：
+   - **CPU核心数评估**：线程数不超过核心数的1.5倍，避免过度上下文切换
+   - **内存带宽考量**：数据并行度受内存带宽限制，需要合理分配
+   - **GPU计算能力**：根据GPU架构选择合适的并行粒度
+
+2. **质量要求验证**：
+   - **延迟优先**：选择流水线模式，减少同步点
+   - **吞吐量优先**：选择数据并行模式，最大化并发度
+   - **资源效率**：选择混合模式，平衡各种资源使用
+
+3. **发展适应性考虑**：
+   - **算法演进**：为复杂算法预留并行化空间
+   - **数据规模增长**：设计可水平扩展的并行架构
+   - **功能扩展**：保持模块间低耦合，便于独立优化
+
+**总结：设计评估的决策流程**
+- **是否适配目标平台？** → 若否，调整数据分布或任务分解
+- **是否满足质量要求？** → 若否，优化负载均衡或减少同步开销
+- **是否适合下一阶段？** → 若否，重新选择算法结构模式（如从任务并行转为流水线）
+
+这种系统化的并行设计评估流程确保了架构选择的科学性和前瞻性，为MVP系统的成功实施和后续演进奠定了坚实基础。
+
+---
 
 ## 4. 目录结构与组织
 
-基于上述架构设计，推荐的项目目录结构如下：
+基于上述架构设计和模块化原则，推荐的项目目录结构如下，这个结构支持模块化开发、便于维护和扩展：
 
-```mermaid
-graph TB
-    subgraph "项目目录结构"
-        ROOT[radar_mvp/]
+### 4.1 完整项目目录结构
 
-        subgraph "源代码目录"
-            SRC[src/]
-            CORE[core/]
-            MODULES[modules/]
-            UTILS[utils/]
-            TESTS[tests/]
-        end
-
-        subgraph "构建和配置"
-            BUILD[build/]
-            CONFIG[config/]
-            SCRIPTS[scripts/]
-        end
-
-        subgraph "文档和资源"
-            DOCS[docs/]
-            RESOURCES[resources/]
-        end
-
-        ROOT --> SRC
-        ROOT --> BUILD
-        ROOT --> CONFIG
-        ROOT --> SCRIPTS
-        ROOT --> DOCS
-        ROOT --> RESOURCES
-
-        SRC --> CORE
-        SRC --> MODULES
-        SRC --> UTILS
-        SRC --> TESTS
-    end
-
-    classDef main fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
-    classDef src fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
-    classDef config fill:#f8bbd9,stroke:#c2185b,stroke-width:2px
-
-    class ROOT main
-    class SRC,CORE,MODULES,UTILS,TESTS src
-    class BUILD,CONFIG,SCRIPTS,DOCS,RESOURCES config
+```txt
+radar_mvp/
+├── CMakeLists.txt                      # 根CMake配置文件
+├── README.md                           # 项目说明文档
+├── vcpkg.json                          # vcpkg依赖配置
+├── vcpkg-configuration.json            # vcpkg配置信息
+│
+├── configs/                            # 配置文件目录
+│   ├── config.yaml                     # 主配置文件
+│   ├── network_config.yaml             # 网络配置
+│   ├── gpu_config.yaml                 # GPU配置
+│   └── logging_config.yaml             # 日志配置
+│
+├── include/                            # 头文件目录
+│   ├── common/                         # 公共头文件
+│   │   ├── types.h                     # 核心数据类型定义
+│   │   ├── error_codes.h               # 错误代码定义
+│   │   ├── interfaces.h                # 接口定义
+│   │   ├── config_manager.h            # 配置管理器
+│   │   ├── logger.h                    # 日志系统
+│   │   └── performance_monitor.h       # 性能监控
+│   │
+│   ├── application/                    # 应用层头文件
+│   │   └── radar_application.h         # 主应用类
+│   │
+│   └── modules/                        # 模块头文件
+│       ├── data_receiver.h             # 数据接收模块
+│       ├── data_processor.h            # 数据处理模块
+│       ├── display_controller.h        # 显示控制模块
+│       ├── task_scheduler.h            # 任务调度器
+│       │
+│       ├── data_receiver/              # 数据接收子模块
+│       │   ├── data_receiver_base.h
+│       │   ├── data_receiver_factory.h
+│       │   ├── data_receiver_implementations.h
+│       │   ├── data_receiver_statistics.h
+│       │   ├── hardware_receiver.h
+│       │   ├── simulation_receiver.h
+│       │   └── README.md
+│       │
+│       ├── data_processor/             # 数据处理子模块
+│       │   ├── algorithm_interface.h
+│       │   ├── signal_processor.h
+│       │   ├── gpu_manager.h
+│       │   └── algorithm_simulator.h
+│       │
+│       ├── display_controller/         # 显示控制子模块
+│       │   ├── display_controller_base.h
+│       │   ├── display_controller_factory.h
+│       │   ├── display_controller_implementations.h
+│       │   ├── display_controller_statistics.h
+│       │   ├── chart_renderer.h
+│       │   └── ui_manager.h
+│       │
+│       └── task_scheduler/             # 任务调度子模块
+│           ├── task_scheduler_factory.h
+│           ├── task_scheduler_implementations.h
+│           ├── task_scheduler_interfaces.h
+│           ├── task_scheduler_types.h
+│           ├── thread_pool_manager.h
+│           └── resource_allocator.h
+│
+├── src/                                # 源代码目录
+│   ├── main.cpp                        # 主程序入口
+│   │
+│   ├── application/                    # 应用层实现
+│   │   └── radar_application.cpp       # 主应用实现
+│   │
+│   ├── common/                         # 公共模块实现
+│   │   ├── config_manager.cpp          # 配置管理器实现
+│   │   ├── error_codes.cpp             # 错误代码实现
+│   │   ├── logger.cpp                  # 日志系统实现
+│   │   └── performance_monitor.cpp     # 性能监控实现
+│   │
+│   └── modules/                        # 模块实现
+│       ├── data_receiver/              # 数据接收模块实现
+│       │   ├── data_receiver.cpp
+│       │   ├── udp_socket.cpp
+│       │   ├── packet_validator.cpp
+│       │   └── data_buffer.cpp
+│       │
+│       ├── data_processor/             # 数据处理模块实现
+│       │   ├── data_processor.cpp
+│       │   ├── signal_processor.cpp
+│       │   ├── gpu_manager.cpp
+│       │   └── algorithm_simulator.cpp
+│       │
+│       ├── display_controller/         # 显示控制模块实现
+│       │   ├── display_controller.cpp
+│       │   ├── chart_renderer.cpp
+│       │   ├── ui_manager.cpp
+│       │   └── qt_widgets/
+│       │       ├── main_window.cpp
+│       │       ├── data_chart_widget.cpp
+│       │       └── status_panel_widget.cpp
+│       │
+│       └── task_scheduler/             # 任务调度模块实现
+│           ├── task_scheduler.cpp
+│           ├── thread_pool_manager.cpp
+│           ├── resource_allocator.cpp
+│           └── priority_queue.cpp
+│
+├── tests/                              # 测试目录
+│   ├── unit_tests/                     # 单元测试
+│   │   ├── common/                     # 公共模块测试
+│   │   │   ├── config_manager_test.cpp
+│   │   │   ├── logger_test.cpp
+│   │   │   └── performance_monitor_test.cpp
+│   │   │
+│   │   ├── data_receiver/              # 数据接收模块测试
+│   │   │   ├── data_receiver_test.cpp
+│   │   │   ├── udp_socket_test.cpp
+│   │   │   └── packet_validator_test.cpp
+│   │   │
+│   │   ├── data_processor/             # 数据处理模块测试
+│   │   │   ├── data_processor_test.cpp
+│   │   │   ├── gpu_manager_test.cpp
+│   │   │   └── algorithm_simulator_test.cpp
+│   │   │
+│   │   ├── display_controller/         # 显示控制模块测试
+│   │   │   └── display_controller_test.cpp
+│   │   │
+│   │   └── task_scheduler/             # 任务调度模块测试
+│   │       ├── task_scheduler_test.cpp
+│   │       └── thread_pool_test.cpp
+│   │
+│   ├── integration_tests/              # 集成测试
+│   │   ├── data_flow_test.cpp          # 数据流集成测试
+│   │   ├── module_integration_test.cpp # 模块集成测试
+│   │   └── system_integration_test.cpp # 系统集成测试
+│   │
+│   ├── performance_tests/              # 性能测试
+│   │   ├── throughput_test.cpp         # 吞吐量测试
+│   │   ├── latency_test.cpp            # 延迟测试
+│   │   └── stress_test.cpp             # 压力测试
+│   │
+│   └── test_data/                      # 测试数据
+│       ├── sample_packets/             # 示例数据包
+│       ├── reference_results/          # 参考结果
+│       └── performance_baselines/      # 性能基准
+│
+├── third_party/                        # 第三方库（Git Submodules）
+│   ├── CMakeLists.txt                  # 第三方库构建配置
+│   ├── spdlog/                         # 日志库
+│   ├── yaml-cpp/                       # YAML解析库
+│   ├── googletest/                     # 测试框架
+│   └── boost/                          # Boost库（可选）
+│
+├── scripts/                            # 构建和工具脚本
+│   ├── build_windows.ps1               # Windows构建脚本
+│   ├── build_linux.sh                  # Linux构建脚本
+│   ├── setup_dependencies.ps1          # 依赖安装脚本
+│   ├── run_tests.ps1                   # 测试运行脚本
+│   ├── generate_docs.ps1               # 文档生成脚本
+│   └── deploy.ps1                      # 部署脚本
+│
+├── build/                              # 构建输出目录（gitignore）
+│   ├── Debug/                          # Debug构建
+│   ├── Release/                        # Release构建
+│   └── Testing/                        # 测试构建
+│
+├── docs/                               # 项目文档
+│   ├── api/                            # API文档
+│   ├── design/                         # 设计文档
+│   ├── user_guide/                     # 用户指南
+│   └── developer_guide/                # 开发者指南
+│
+├── tools/                              # 开发工具
+│   ├── code_generator/                 # 代码生成工具
+│   ├── performance_analyzer/           # 性能分析工具
+│   └── configuration_editor/           # 配置编辑工具
+│
+├── resources/                          # 资源文件
+│   ├── icons/                          # 图标资源
+│   ├── ui/                             # UI资源文件
+│   └── shaders/                        # GPU着色器（如需要）
+│
+└── logs/                               # 日志输出目录（gitignore）
+    ├── application.log                 # 应用日志
+    ├── performance.log                 # 性能日志
+    └── error.log                       # 错误日志
 ```
+
+### 4.2 目录设计原则
+
+**分层组织原则**：
+- **include/** 和 **src/** 分离：头文件和实现文件分开，便于接口管理
+- **模块化目录**：每个模块有独立的子目录，支持并行开发
+- **测试目录镜像**：测试目录结构镜像源代码结构，便于定位
+
+**构建支持原则**：
+- **CMake分层**：根目录、子模块、第三方库都有独立的CMake配置
+- **依赖管理**：使用vcpkg管理第三方依赖，确保构建一致性
+- **输出分离**：构建输出与源代码分离，保持源码目录整洁
+
+**开发效率原则**：
+- **脚本自动化**：提供构建、测试、部署的自动化脚本
+- **文档齐全**：每个模块都有对应的README和设计文档
+- **工具支持**：提供代码生成、性能分析等开发工具
+
+### 4.3 关键文件说明
+
+**根配置文件**：
+- **CMakeLists.txt**：主构建配置，定义全局编译选项和子项目
+- **vcpkg.json**：依赖包配置，确保第三方库版本一致性
+- **README.md**：项目概述和快速入门指南
+
+**核心头文件**：
+- **types.h**：系统核心数据类型，如ComplexFloat、AlignedVector等
+- **interfaces.h**：模块接口定义，如IModule、IDataSource等
+- **error_codes.h**：统一错误代码定义和处理机制
+
+**构建脚本**：
+- **build_windows.ps1**：Windows平台一键构建脚本
+- **setup_dependencies.ps1**：自动安装和配置依赖库
+- **run_tests.ps1**：自动化测试执行和报告生成
+
+这种目录结构设计支持：
+- **模块化开发**：每个模块独立开发和测试
+- **并行构建**：支持多核并行编译
+- **持续集成**：便于CI/CD流水线集成
+- **版本管理**：清晰的文件组织便于版本控制
+- **团队协作**：标准化的目录结构降低学习成本
+
+---
 
 ## 5. 核心模块设计
 
@@ -3655,21 +4003,27 @@ MVP将建立起可扩展的系统架构基础，为后续功能扩展、性能�
 
 ## 版本信息
 
-| 版本号 | 日期       | 作者       | 修改内容                    |
-| ------ | ---------- | ---------- | --------------------------- |
+| 版本号 | 日期       | 作者  | 修改内容                    |
+| ------ | ---------- | ----- | --------------------------- |
 | v1.0.0 | 2024-01-01 | Kelin | 初始版本，完整的MVP设计文档 |
 | v1.0.1 | 2024-01-15 | Kelin | 补充技术选型细节和风险分析  |
-| v1.0.2 | 2024-02-01 | Kelin   | 完善开发计划和测试策略      |
-
-**文档状态**：已发布
-**生效日期**：2024-01-01
-**下次评审日期**：2024-03-01
-
-**变更记录**：
-- v1.0.0: 建立完整的MVP设计框架，包含系统架构、模块设计、技术选型等
-- v1.0.1: 根据技术评审意见，补充了GPU编程细节和性能优化策略
-- v1.0.2: 根据项目管理需要，完善了开发计划时间表和团队协作机制
-
-
+| v1.0.2 | 2024-02-01 | Kelin | 完善开发计划和测试策略      |
 
 ---
+
+## 变更记录
+
+| 版本   | 日期       | 修改人  | 变更摘要                                         |
+| :----- | :--------- | :------ | :----------------------------------------------- |
+| v1.0.0 | 2024-01-01 | Kelin   | 创建文档初始版本                                 |
+| v1.0.1 | 2024-01-15 | Kelin   | 补充技术选型细节和风险分析                       |
+| v1.0.2 | 2024-02-01 | Kelin   | 完善开发计划和测试策略                           |
+| v1.1.0 | 2025-09-22 | Copilot | 整合架构图，加入并发设计模式，优化文档结构和格式 |
+
+---
+
+## 结束语
+
+本MVP设计文档为基于GPU的相控阵雷达数据处理系统奠定了坚实的架构基础。通过详细的组件架构设计、并发模式分析和模块化开发指导，为团队提供了完整的技术路线图。文档重点关注了系统的核心功能验证，特别是数据流转、任务调度和并发处理机制，这些都是后续复杂算法集成的关键基础。
+
+团队将通过MVP的成功实施，验证架构设计的可行性，建立标准化的开发流程，并为后续的产品化开发积累宝贵经验。期待这个设计能够引导项目走向成功！
