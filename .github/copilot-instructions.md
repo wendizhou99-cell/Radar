@@ -29,6 +29,7 @@ This document provides essential guidelines for AI-assisted development on this 
 
 - **Modular Design**: The system is composed of independent modules (e.g., DataReceiver, DataProcessor). All modules must inherit from the `IModule` interface defined in `include/common/interfaces.h`.
 - **Interface-Driven Development**: Always code against interfaces, not concrete implementations. Do not create custom data types if a suitable one exists in `include/common/types.h`.
+- **Strategy/Plugin Pattern for Algorithms**: **MANDATORY** - All algorithm components (parsers, validators, processors, etc.) must implement abstract interfaces to support hot-swapping, versioning, and future upgrades. Use factory patterns or dependency injection for concrete implementations. This ensures seamless algorithm evolution without breaking existing code.
 - **Error Handling**: **No exceptions in performance-critical paths.** Use the `ErrorCode` return type as defined in `include/common/error_codes.h`. Each module has its own error code range (e.g., `DataReceiverErrors::*`).
 - **Configuration Management**: All module configurations should be managed by a central `ConfigManager` and defined in `configs/config.yaml`.
 
@@ -84,9 +85,12 @@ Follow these steps to create a new module.
 - **DO**: Use the project-defined types from `types.h`.
 - **DO**: Return `ErrorCode` for functions that can fail.
 - **DO**: Use the `RADAR_*` logging macros for structured logging.
+- **DO**: Implement algorithm components as strategy patterns with abstract interfaces for future upgrades.
+- **DO**: Use factory functions or dependency injection to create algorithm instances, enabling runtime switching.
 - **DON'T**: Use `std::vector` for signal data; use `Aligned...Vector` instead.
 - **DON'T**: Throw exceptions in the main data processing pipeline.
 - **DON'T**: Create monolithic classes. Decompose functionality into smaller, single-responsibility components.
+- **DON'T**: Hard-code algorithm implementations; always abstract them behind interfaces for extensibility.
 
 ### 8. AI Collaboration Rules — Clarification & Iterative Delivery (AI 协作规则 — 澄清与迭代交付)
 
