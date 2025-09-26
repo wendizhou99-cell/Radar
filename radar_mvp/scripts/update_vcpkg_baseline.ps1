@@ -8,7 +8,7 @@
 # 使用方法:
 #   .\update_vcpkg_baseline.ps1 [-VcpkgRoot "D:\Software\vcpkg"]
 #
-# @author Kelin
+# @author Klein
 # @version 1.0
 # @date 2025-09-22
 #]]

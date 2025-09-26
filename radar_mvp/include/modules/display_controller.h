@@ -11,7 +11,7 @@
  * - display_controller_implementations.h: 具体实现类
  * - display_controller_factory.h: 工厂模式和管理器
  *
- * @author Kelin
+ * @author Klein
  * @version 1.0
  * @date 2025-09-12
  * @since 1.0
@@ -23,26 +23,25 @@
 #pragma once
 
 // 核心基础设施
-#include "../../common/types.h"
-#include "../../common/interfaces.h"
 #include "../../common/error_codes.h"
+#include "../../common/interfaces.h"
+#include "../../common/types.h"
 
 // 模块化接口文件
 #include "display_controller/display_controller_base.h"
-#include "display_controller/display_controller_statistics.h"
-#include "display_controller/display_controller_implementations.h"
 #include "display_controller/display_controller_factory.h"
+#include "display_controller/display_controller_implementations.h"
+#include "display_controller/display_controller_statistics.h"
 
-namespace radar
-{
-    // 为了向后兼容，将模块化命名空间中的类型别名到主命名空间
-    using DisplayController = modules::DisplayControllerBase;
-    using ConsoleDisplayController = modules::ConsoleDisplayController;
-    using FileDisplayController = modules::FileDisplayController;
-    using NetworkDisplayController = modules::NetworkDisplayController;
-    using HybridDisplayController = modules::HybridDisplayController;
-    using DisplayStatistics = modules::DisplayStatistics;
-    using DisplayControllerType = modules::DisplayControllerType;
-    using DisplayControllerFactory = modules::DisplayControllerFactory;
+namespace radar {
+// 为了向后兼容，将模块化命名空间中的类型别名到主命名空间
+using DisplayController = modules::DisplayControllerBase;
+using ConsoleDisplayController = modules::ConsoleDisplayController;
+using FileDisplayController = modules::FileDisplayController;
+using NetworkDisplayController = modules::NetworkDisplayController;
+using HybridDisplayController = modules::HybridDisplayController;
+using DisplayStatistics = modules::DisplayStatistics;
+using DisplayControllerType = modules::DisplayControllerType;
+using DisplayControllerFactory = modules::DisplayControllerFactory;
 
-} // namespace radar
+}  // namespace radar

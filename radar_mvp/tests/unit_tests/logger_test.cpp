@@ -5,61 +5,57 @@
  * 测试日志管理器的各项功能，包括初始化、日志记录、级别控制、
  * 多记录器管理等核心功能的正确性和性能。
  *
- * @author Kelin
+ * @author Klein
  * @version 1.0
  * @date 2025-09-11
  * @since 1.0
  */
 
-#include <gtest/gtest.h>
 #include "common/logger.h"
+
+#include <gtest/gtest.h>
+
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <thread>
-#include <chrono>
 
 using namespace radar::common;
-using radar::ErrorCode; // 使用 radar::ErrorCode
+using radar::ErrorCode;  // 使用 radar::ErrorCode
 
-class LoggerTest : public ::testing::Test
-{
-protected:
-    void SetUp() override
-    {
+class LoggerTest : public ::testing::Test {
+  protected:
+    void SetUp() override {
         // 清理测试环境
         LoggerManager::getInstance().shutdown();
 
         // 删除可能存在的测试日志文件
-        if (std::filesystem::exists("test_logs"))
-        {
+        if (std::filesystem::exists("test_logs")) {
             std::filesystem::remove_all("test_logs");
         }
     }
 
-    void TearDown() override
-    {
+    void TearDown() override {
         LoggerManager::getInstance().shutdown();
 
         // 清理测试文件
-        if (std::filesystem::exists("test_logs"))
-        {
+        if (std::filesystem::exists("test_logs")) {
             std::filesystem::remove_all("test_logs");
         }
     }
 
-    LoggerConfig createTestConfig()
-    {
+    LoggerConfig createTestConfig() {
         LoggerConfig config;
         config.globalLevel = LogLevel::DEBUG;
-        config.asyncMode = false; // 同步模式便于测试
+        config.asyncMode = false;  // 同步模式便于测试
 
         config.console.enabled = true;
-        config.console.colorEnabled = false; // 避免测试输出中的颜色代码
+        config.console.colorEnabled = false;  // 避免测试输出中的颜色代码
         config.console.level = LogLevel::INFO;
 
         config.file.enabled = true;
         config.file.filename = "test_logs/test.log";
-        config.file.maxFileSize = 1024 * 1024; // 1MB
+        config.file.maxFileSize = 1024 * 1024;  // 1MB
         config.file.maxFiles = 3;
         config.file.level = LogLevel::DEBUG;
 
@@ -74,8 +70,7 @@ protected:
 // 基础功能测试
 //==============================================================================
 
-TEST_F(LoggerTest, InitializationAndShutdown)
-{
+TEST_F(LoggerTest, InitializationAndShutdown) {
     auto &manager = LoggerManager::getInstance();
     EXPECT_FALSE(manager.isInitialized());
 
@@ -87,7 +82,7 @@ TEST_F(LoggerTest, InitializationAndShutdown)
 
     // 测试重复初始化
     result = manager.initialize(config);
-    EXPECT_EQ(result, radar::SystemErrors::SUCCESS); // 应该成功但给出警告
+    EXPECT_EQ(result, radar::SystemErrors::SUCCESS);  // 应该成功但给出警告
 
     // 测试关闭
     result = manager.shutdown();
@@ -95,8 +90,7 @@ TEST_F(LoggerTest, InitializationAndShutdown)
     EXPECT_FALSE(manager.isInitialized());
 }
 
-TEST_F(LoggerTest, DefaultLoggerCreation)
-{
+TEST_F(LoggerTest, DefaultLoggerCreation) {
     auto &manager = LoggerManager::getInstance();
     LoggerConfig config = createTestConfig();
     ASSERT_EQ(manager.initialize(config), radar::SystemErrors::SUCCESS);
@@ -111,8 +105,7 @@ TEST_F(LoggerTest, DefaultLoggerCreation)
     EXPECT_EQ(logger, logger2);
 }
 
-TEST_F(LoggerTest, ModuleLoggerCreation)
-{
+TEST_F(LoggerTest, ModuleLoggerCreation) {
     auto &manager = LoggerManager::getInstance();
     LoggerConfig config = createTestConfig();
     ASSERT_EQ(manager.initialize(config), radar::SystemErrors::SUCCESS);
@@ -136,8 +129,7 @@ TEST_F(LoggerTest, ModuleLoggerCreation)
 // 日志级别测试
 //==============================================================================
 
-TEST_F(LoggerTest, LogLevelControl)
-{
+TEST_F(LoggerTest, LogLevelControl) {
     auto &manager = LoggerManager::getInstance();
     LoggerConfig config = createTestConfig();
     config.globalLevel = LogLevel::INFO;
@@ -158,8 +150,7 @@ TEST_F(LoggerTest, LogLevelControl)
 // 日志输出测试
 //==============================================================================
 
-TEST_F(LoggerTest, LogOutputToFile)
-{
+TEST_F(LoggerTest, LogOutputToFile) {
     auto &manager = LoggerManager::getInstance();
     LoggerConfig config = createTestConfig();
     ASSERT_EQ(manager.initialize(config), radar::SystemErrors::SUCCESS);
@@ -182,16 +173,14 @@ TEST_F(LoggerTest, LogOutputToFile)
     std::ifstream logFile("test_logs/test.log");
     ASSERT_TRUE(logFile.is_open());
 
-    std::string content((std::istreambuf_iterator<char>(logFile)),
-                        std::istreambuf_iterator<char>());
+    std::string content((std::istreambuf_iterator<char>(logFile)), std::istreambuf_iterator<char>());
 
     EXPECT_TRUE(content.find("Test info message") != std::string::npos);
     EXPECT_TRUE(content.find("Test warning message") != std::string::npos);
     EXPECT_TRUE(content.find("Test error message") != std::string::npos);
 }
 
-TEST_F(LoggerTest, MacroUsage)
-{
+TEST_F(LoggerTest, MacroUsage) {
     auto &manager = LoggerManager::getInstance();
     LoggerConfig config = createTestConfig();
     ASSERT_EQ(manager.initialize(config), radar::SystemErrors::SUCCESS);
@@ -212,11 +201,10 @@ TEST_F(LoggerTest, MacroUsage)
 // 性能和并发测试
 //==============================================================================
 
-TEST_F(LoggerTest, ConcurrentLogging)
-{
+TEST_F(LoggerTest, ConcurrentLogging) {
     auto &manager = LoggerManager::getInstance();
     LoggerConfig config = createTestConfig();
-    config.asyncMode = true; // 启用异步模式进行并发测试
+    config.asyncMode = true;  // 启用异步模式进行并发测试
     ASSERT_EQ(manager.initialize(config), radar::SystemErrors::SUCCESS);
 
     const int threadCount = 4;
@@ -224,22 +212,20 @@ TEST_F(LoggerTest, ConcurrentLogging)
     std::vector<std::thread> threads;
 
     // 启动多个线程同时写日志
-    for (int t = 0; t < threadCount; ++t)
-    {
-        threads.emplace_back([&manager, t, messagesPerThread]()
-                             {
+    for (int t = 0; t < threadCount; ++t) {
+        threads.emplace_back([&manager, t, messagesPerThread]() {
             auto logger = manager.getLogger("thread_" + std::to_string(t));
             for (int i = 0; i < messagesPerThread; ++i) {
                 logger->info("Thread {} message {}", t, i);
                 if (i % 10 == 0) {
                     std::this_thread::sleep_for(std::chrono::microseconds(1));
                 }
-            } });
+            }
+        });
     }
 
     // 等待所有线程完成
-    for (auto &thread : threads)
-    {
+    for (auto &thread : threads) {
         thread.join();
     }
 
@@ -253,8 +239,7 @@ TEST_F(LoggerTest, ConcurrentLogging)
 // 统计信息测试
 //==============================================================================
 
-TEST_F(LoggerTest, Statistics)
-{
+TEST_F(LoggerTest, Statistics) {
     auto &manager = LoggerManager::getInstance();
     LoggerConfig config = createTestConfig();
     ASSERT_EQ(manager.initialize(config), radar::SystemErrors::SUCCESS);
@@ -275,8 +260,7 @@ TEST_F(LoggerTest, Statistics)
 // 错误处理测试
 //==============================================================================
 
-TEST_F(LoggerTest, ErrorHandling)
-{
+TEST_F(LoggerTest, ErrorHandling) {
     auto &manager = LoggerManager::getInstance();
 
     // 测试未初始化时的操作
@@ -288,7 +272,7 @@ TEST_F(LoggerTest, ErrorHandling)
     // 测试无效配置
     LoggerConfig invalidConfig;
     invalidConfig.console.enabled = false;
-    invalidConfig.file.enabled = false; // 没有输出目标
+    invalidConfig.file.enabled = false;  // 没有输出目标
 
     ErrorCode result = manager.initialize(invalidConfig);
     EXPECT_EQ(result, radar::SystemErrors::CONFIGURATION_ERROR);
@@ -298,8 +282,7 @@ TEST_F(LoggerTest, ErrorHandling)
 // 配置测试
 //==============================================================================
 
-TEST_F(LoggerTest, ConfigurationOptions)
-{
+TEST_F(LoggerTest, ConfigurationOptions) {
     auto &manager = LoggerManager::getInstance();
 
     // 测试不同的配置组合

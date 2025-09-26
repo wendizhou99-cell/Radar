@@ -9,21 +9,24 @@
  * - 配置管理测试
  * - 线程安全测试
  *
- * @author Kelin
+ * @author Klein
  * @version 2.0
  * @date 2025-09-13
  * @since 1.0
  */
 
-#include <gtest/gtest.h>
 #include "modules/data_receiver.h"
-#include "common/logger.h"
-#include "common/config_manager.h"
+
+#include <gtest/gtest.h>
+
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <thread>
-#include <chrono>
-#include <atomic>
+
+#include "common/config_manager.h"
+#include "common/logger.h"
 
 using namespace radar;
 using namespace radar::common;
@@ -32,11 +35,9 @@ using radar::ErrorCode;
 /**
  * @brief 数据接收器测试夹具
  */
-class DataReceiverTest : public ::testing::Test
-{
-protected:
-    void SetUp() override
-    {
+class DataReceiverTest : public ::testing::Test {
+  protected:
+    void SetUp() override {
         // 初始化日志系统
         LoggerConfig logConfig;
         logConfig.console.enabled = true;
@@ -51,11 +52,9 @@ protected:
         createTestDataFile("test_data/radar_data.bin", 1024);
     }
 
-    void TearDown() override
-    {
+    void TearDown() override {
         // 清理测试文件
-        if (std::filesystem::exists("test_data"))
-        {
+        if (std::filesystem::exists("test_data")) {
             std::filesystem::remove_all("test_data");
         }
 
@@ -65,18 +64,15 @@ protected:
     /**
      * @brief 创建测试数据文件
      */
-    bool createTestDataFile(const std::string &filePath, size_t dataSize)
-    {
+    bool createTestDataFile(const std::string &filePath, size_t dataSize) {
         std::ofstream file(filePath, std::ios::binary);
-        if (!file.is_open())
-        {
+        if (!file.is_open()) {
             return false;
         }
 
         // 生成模拟雷达数据
         std::vector<uint8_t> testData(dataSize);
-        for (size_t i = 0; i < dataSize; ++i)
-        {
+        for (size_t i = 0; i < dataSize; ++i) {
             testData[i] = static_cast<uint8_t>(i % 256);
         }
 
@@ -88,8 +84,7 @@ protected:
     /**
      * @brief 创建测试用 YAML 配置
      */
-    std::string createTestConfig()
-    {
+    std::string createTestConfig() {
         return R"(
 data_receiver:
   simulation:
@@ -108,33 +103,25 @@ data_receiver:
 // 基础功能测试
 //==============================================================================
 
-TEST_F(DataReceiverTest, BasicTest)
-{
+TEST_F(DataReceiverTest, BasicTest) {
     // 最简单的测试，确保测试框架工作
     EXPECT_EQ(1 + 1, 2);
 }
 
-TEST_F(DataReceiverTest, SimulationReceiverCreation)
-{
-    try
-    {
+TEST_F(DataReceiverTest, SimulationReceiverCreation) {
+    try {
         std::cout << "Step 1: About to create receiver" << std::endl;
 
         // 测试仿真接收器创建
-        auto receiver = DataReceiverFactory::createReceiver(
-            DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
-            DataReceiverConfig{},
-            nullptr);
+        auto receiver = DataReceiverFactory::createReceiver(DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
+                                                            DataReceiverConfig{}, nullptr);
 
         std::cout << "Step 2: Factory call completed" << std::endl;
 
-        if (receiver == nullptr)
-        {
+        if (receiver == nullptr) {
             std::cout << "Factory returned null receiver" << std::endl;
             GTEST_FAIL() << "Factory returned null receiver";
-        }
-        else
-        {
+        } else {
             std::cout << "Factory created receiver successfully" << std::endl;
         }
 
@@ -144,25 +131,18 @@ TEST_F(DataReceiverTest, SimulationReceiverCreation)
         EXPECT_TRUE(true);
 
         std::cout << "Step 4: Test completed successfully" << std::endl;
-    }
-    catch (const std::exception &e)
-    {
+    } catch (const std::exception &e) {
         std::cout << "Exception caught: " << e.what() << std::endl;
         GTEST_FAIL() << "Exception caught: " << e.what();
-    }
-    catch (...)
-    {
+    } catch (...) {
         std::cout << "Unknown exception caught" << std::endl;
         GTEST_FAIL() << "Unknown exception caught";
     }
 }
 
-TEST_F(DataReceiverTest, SimulationReceiverConfiguration)
-{
-    auto receiver = DataReceiverFactory::createReceiver(
-        DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
-        DataReceiverConfig{},
-        nullptr);
+TEST_F(DataReceiverTest, SimulationReceiverConfiguration) {
+    auto receiver = DataReceiverFactory::createReceiver(DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
+                                                        DataReceiverConfig{}, nullptr);
     ASSERT_NE(receiver, nullptr);
 
     // 初始化接收器
@@ -172,12 +152,9 @@ TEST_F(DataReceiverTest, SimulationReceiverConfiguration)
     EXPECT_EQ(receiver->getState(), ModuleState::READY);
 }
 
-TEST_F(DataReceiverTest, SimulationReceiverStartStop)
-{
-    auto receiver = DataReceiverFactory::createReceiver(
-        DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
-        DataReceiverConfig{},
-        nullptr);
+TEST_F(DataReceiverTest, SimulationReceiverStartStop) {
+    auto receiver = DataReceiverFactory::createReceiver(DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
+                                                        DataReceiverConfig{}, nullptr);
     ASSERT_NE(receiver, nullptr);
 
     // 初始化和启动
@@ -201,31 +178,28 @@ TEST_F(DataReceiverTest, SimulationReceiverStartStop)
 // 数据接收测试
 //==============================================================================
 
-TEST_F(DataReceiverTest, DataReception)
-{
-    auto receiver = DataReceiverFactory::createReceiver(
-        DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
-        DataReceiverConfig{},
-        nullptr);
+TEST_F(DataReceiverTest, DataReception) {
+    auto receiver = DataReceiverFactory::createReceiver(DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
+                                                        DataReceiverConfig{}, nullptr);
     ASSERT_NE(receiver, nullptr);
 
     std::atomic<int> packetsReceived{0};
     std::atomic<size_t> totalBytesReceived{0};
 
     // 设置数据回调
-    receiver->setPacketReceivedCallback([&](RawDataPacketPtr packet)
-                                        {
+    receiver->setPacketReceivedCallback([&](RawDataPacketPtr packet) {
         if (packet) {
             packetsReceived++;
             totalBytesReceived += packet->iqData.size() * sizeof(ComplexFloat);
-        } });
+        }
+    });
 
     // 设置错误回调
     bool errorOccurred = false;
-    receiver->setErrorCallback([&](ErrorCode code, const std::string &message)
-                               {
+    receiver->setErrorCallback([&](ErrorCode code, const std::string &message) {
         errorOccurred = true;
-        FAIL() << "Unexpected error: " << message << " (code: " << code << ")"; });
+        FAIL() << "Unexpected error: " << message << " (code: " << code << ")";
+    });
 
     // 启动接收
     EXPECT_EQ(receiver->initialize(), radar::SystemErrors::SUCCESS);
@@ -247,12 +221,9 @@ TEST_F(DataReceiverTest, DataReception)
 // 统计信息测试
 //==============================================================================
 
-TEST_F(DataReceiverTest, BufferStatusCheck)
-{
-    auto receiver = DataReceiverFactory::createReceiver(
-        DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
-        DataReceiverConfig{},
-        nullptr);
+TEST_F(DataReceiverTest, BufferStatusCheck) {
+    auto receiver = DataReceiverFactory::createReceiver(DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
+                                                        DataReceiverConfig{}, nullptr);
     ASSERT_NE(receiver, nullptr);
 
     // 启动接收
@@ -273,12 +244,9 @@ TEST_F(DataReceiverTest, BufferStatusCheck)
     EXPECT_EQ(receiver->stop(), radar::SystemErrors::SUCCESS);
 }
 
-TEST_F(DataReceiverTest, BufferFlushTest)
-{
-    auto receiver = DataReceiverFactory::createReceiver(
-        DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
-        DataReceiverConfig{},
-        nullptr);
+TEST_F(DataReceiverTest, BufferFlushTest) {
+    auto receiver = DataReceiverFactory::createReceiver(DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
+                                                        DataReceiverConfig{}, nullptr);
     ASSERT_NE(receiver, nullptr);
 
     // 启动并积累一些数据
@@ -304,12 +272,9 @@ TEST_F(DataReceiverTest, BufferFlushTest)
 // 错误处理测试
 //==============================================================================
 
-TEST_F(DataReceiverTest, InvalidConfiguration)
-{
-    auto receiver = DataReceiverFactory::createReceiver(
-        DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
-        DataReceiverConfig{},
-        nullptr);
+TEST_F(DataReceiverTest, InvalidConfiguration) {
+    auto receiver = DataReceiverFactory::createReceiver(DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
+                                                        DataReceiverConfig{}, nullptr);
     ASSERT_NE(receiver, nullptr);
 
     // 测试重复启动
@@ -323,16 +288,13 @@ TEST_F(DataReceiverTest, InvalidConfiguration)
     EXPECT_EQ(receiver->stop(), radar::SystemErrors::SUCCESS);
 }
 
-TEST_F(DataReceiverTest, StartWithoutConfiguration)
-{
+TEST_F(DataReceiverTest, StartWithoutConfiguration) {
     // 创建无效配置（packetSizeBytes = 0 会导致验证失败）
     DataReceiverConfig invalidConfig;
-    invalidConfig.packetSizeBytes = 0; // 无效的包大小
+    invalidConfig.packetSizeBytes = 0;  // 无效的包大小
 
-    auto receiver = DataReceiverFactory::createReceiver(
-        DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
-        invalidConfig,
-        nullptr);
+    auto receiver = DataReceiverFactory::createReceiver(DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
+                                                        invalidConfig, nullptr);
 
     // 由于配置无效，工厂应该返回 nullptr
     EXPECT_EQ(receiver, nullptr);
@@ -342,20 +304,16 @@ TEST_F(DataReceiverTest, StartWithoutConfiguration)
 // 线程安全测试
 //==============================================================================
 
-TEST_F(DataReceiverTest, ConcurrentAccess)
-{
-    auto receiver = DataReceiverFactory::createReceiver(
-        DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
-        DataReceiverConfig{},
-        nullptr);
+TEST_F(DataReceiverTest, ConcurrentAccess) {
+    auto receiver = DataReceiverFactory::createReceiver(DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
+                                                        DataReceiverConfig{}, nullptr);
     ASSERT_NE(receiver, nullptr);
 
     std::atomic<int> packetsReceived{0};
     std::atomic<int> statsQueries{0};
 
     // 设置数据回调
-    receiver->setPacketReceivedCallback([&](RawDataPacketPtr /* packet */)
-                                        { packetsReceived++; });
+    receiver->setPacketReceivedCallback([&](RawDataPacketPtr /* packet */) { packetsReceived++; });
 
     // 启动接收
     EXPECT_EQ(receiver->initialize(), radar::SystemErrors::SUCCESS);
@@ -363,22 +321,19 @@ TEST_F(DataReceiverTest, ConcurrentAccess)
 
     // 并发访问缓冲区状态
     std::vector<std::thread> threads;
-    for (int i = 0; i < 5; ++i)
-    {
-        threads.emplace_back([&]()
-                             {
-            for (int j = 0; j < 10; ++j)
-            {
+    for (int i = 0; i < 5; ++i) {
+        threads.emplace_back([&]() {
+            for (int j = 0; j < 10; ++j) {
                 auto bufferStatus = receiver->getBufferStatus();
-                (void)bufferStatus; // 避免未使用变量警告
+                (void)bufferStatus;  // 避免未使用变量警告
                 statsQueries++;
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            } });
+            }
+        });
     }
 
     // 等待线程完成
-    for (auto &thread : threads)
-    {
+    for (auto &thread : threads) {
         thread.join();
     }
 
@@ -392,12 +347,9 @@ TEST_F(DataReceiverTest, ConcurrentAccess)
 // 配置管理测试
 //==============================================================================
 
-TEST_F(DataReceiverTest, ConfigurationFromString)
-{
-    auto receiver = DataReceiverFactory::createReceiver(
-        DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
-        DataReceiverConfig{},
-        nullptr);
+TEST_F(DataReceiverTest, ConfigurationFromString) {
+    auto receiver = DataReceiverFactory::createReceiver(DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
+                                                        DataReceiverConfig{}, nullptr);
     ASSERT_NE(receiver, nullptr);
 
     ErrorCode result = receiver->initialize();
@@ -410,19 +362,16 @@ TEST_F(DataReceiverTest, ConfigurationFromString)
 // 性能测试
 //==============================================================================
 
-TEST_F(DataReceiverTest, ThroughputTest)
-{
-    auto receiver = DataReceiverFactory::createReceiver(
-        DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
-        DataReceiverConfig{},
-        nullptr);
+TEST_F(DataReceiverTest, ThroughputTest) {
+    auto receiver = DataReceiverFactory::createReceiver(DataReceiverFactory::ReceiverType::SIMULATION_RECEIVER,
+                                                        DataReceiverConfig{}, nullptr);
     ASSERT_NE(receiver, nullptr);
 
     std::atomic<size_t> totalBytes{0};
     auto startTime = std::chrono::high_resolution_clock::now();
 
-    receiver->setPacketReceivedCallback([&](RawDataPacketPtr packet)
-                                        { totalBytes += packet->iqData.size() * sizeof(ComplexFloat); });
+    receiver->setPacketReceivedCallback(
+        [&](RawDataPacketPtr packet) { totalBytes += packet->iqData.size() * sizeof(ComplexFloat); });
 
     EXPECT_EQ(receiver->initialize(), radar::SystemErrors::SUCCESS);
     EXPECT_EQ(receiver->start(), radar::SystemErrors::SUCCESS);

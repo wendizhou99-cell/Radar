@@ -4,7 +4,7 @@
  *
  * 实现ThreadPoolScheduler和RealTimeScheduler的具体功能。
  *
- * @author Kelin
+ * @author Klein
  * @version 1.0
  * @date 2025-09-13
  * @since 1.0

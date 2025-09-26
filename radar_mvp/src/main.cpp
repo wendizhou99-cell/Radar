@@ -4,7 +4,7 @@
  *
  * 系统的主要入口点，负责初始化各个模块并启动系统
  *
- * @author Kelin
+ * @author Klein
  * @version 1.0
  * @date 2025-09-11
  * @since 1.0

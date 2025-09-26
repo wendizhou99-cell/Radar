@@ -11,7 +11,7 @@
  * - data_receiver_implementations.h: 具体实现类
  * - data_receiver_factory.h: 工厂模式和管理器
  *
- * @author Kelin
+ * @author Klein
  * @version 2.0
  * @date 2025-09-12
  * @since 1.0
@@ -24,24 +24,23 @@
 
 // 模块化接口文件
 #include "data_receiver/data_receiver_base.h"
-#include "data_receiver/data_receiver_statistics.h"
-#include "data_receiver/data_receiver_implementations.h"
 #include "data_receiver/data_receiver_factory.h"
+#include "data_receiver/data_receiver_implementations.h"
+#include "data_receiver/data_receiver_statistics.h"
 
-namespace radar
-{
-    // 为了向后兼容，将模块化命名空间中的类型别名到主命名空间
-    using DataReceiver = modules::DataReceiver;
-    using UDPDataReceiver = modules::UDPDataReceiver;
-    using FileDataReceiver = modules::FileDataReceiver;
-    using HardwareDataReceiver = modules::HardwareDataReceiver;
-    using SimulationDataReceiver = modules::SimulationDataReceiver;
-    using ReceptionStatistics = modules::ReceptionStatistics;
-    using PerformanceMonitor = modules::PerformanceMonitor;
-    using StatisticsManager = modules::StatisticsManager;
-    using ReceiverManager = modules::ReceiverManager;
+namespace radar {
+// 为了向后兼容，将模块化命名空间中的类型别名到主命名空间
+using DataReceiver = modules::DataReceiver;
+using UDPDataReceiver = modules::UDPDataReceiver;
+using FileDataReceiver = modules::FileDataReceiver;
+using HardwareDataReceiver = modules::HardwareDataReceiver;
+using SimulationDataReceiver = modules::SimulationDataReceiver;
+using ReceptionStatistics = modules::ReceptionStatistics;
+using PerformanceMonitor = modules::PerformanceMonitor;
+using StatisticsManager = modules::StatisticsManager;
+using ReceiverManager = modules::ReceiverManager;
 
-    // 工厂命名空间别名
-    namespace DataReceiverFactory = modules::DataReceiverFactory;
+// 工厂命名空间别名
+namespace DataReceiverFactory = modules::DataReceiverFactory;
 
-} // namespace radar
+}  // namespace radar

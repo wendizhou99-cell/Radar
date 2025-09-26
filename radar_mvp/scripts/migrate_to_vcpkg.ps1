@@ -8,7 +8,7 @@
 # 使用方法:
 #   .\migrate_to_vcpkg.ps1 [-VcpkgRoot "D:\Software\vcpkg"] [-SkipBackup]
 #
-# @author Kelin
+# @author Klein
 # @version 1.0
 # @date 2025-09-22
 #]]

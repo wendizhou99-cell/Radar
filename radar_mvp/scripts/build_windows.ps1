@@ -8,7 +8,7 @@
 # 使用方法:
 #   .\build_windows.ps1 [-BuildType Debug|Release] [-EnableCuda] [-EnableQt] [-Clean]
 #
-# @author Kelin
+# @author Klein
 # @version 2.0
 # @date 2025-09-22
 #]]

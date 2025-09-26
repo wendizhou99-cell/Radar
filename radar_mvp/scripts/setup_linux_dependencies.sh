@@ -8,7 +8,7 @@
 #
 # 使用方法: ./setup_linux_dependencies.sh [--cuda] [--dev-tools]
 #
-# @author Kelin
+# @author Klein
 # @version 1.0
 # @date 2025-09-13
 ]]

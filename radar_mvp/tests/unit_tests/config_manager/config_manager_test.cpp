@@ -5,33 +5,34 @@
  * 测试配置管理器的各项功能，包括配置加载、类型安全访问、
  * 变更通知、验证器等核心功能的正确性和线程安全性。
  *
- * @author Kelin
+ * @author Klein
  * @version 1.0
  * @date 2025-09-11
  * @since 1.0
  */
 
-#include <gtest/gtest.h>
 #include "common/config_manager.h"
-#include "common/logger.h"
+
+#include <gtest/gtest.h>
+
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <thread>
-#include <atomic>
+
+#include "common/logger.h"
 
 using namespace radar::common;
-using radar::ErrorCode; // 使用 radar::ErrorCode
+using radar::ErrorCode;  // 使用 radar::ErrorCode
 
-class ConfigManagerTest : public ::testing::Test
-{
-protected:
-    void SetUp() override
-    {
+class ConfigManagerTest : public ::testing::Test {
+  protected:
+    void SetUp() override {
         // 初始化日志系统（配置管理器需要日志）
         LoggerConfig logConfig;
         logConfig.console.enabled = true;
         logConfig.file.enabled = false;
-        logConfig.globalLevel = LogLevel::WARN; // 减少测试输出
+        logConfig.globalLevel = LogLevel::WARN;  // 减少测试输出
         LoggerManager::getInstance().initialize(logConfig);
 
         // 创建测试目录
@@ -41,22 +42,19 @@ protected:
         createTestConfigFile();
     }
 
-    void TearDown() override
-    {
+    void TearDown() override {
         // 注意：单例不能通过赋值重置，但可以通过加载空配置来清理状态
         // 或者重新加载默认配置，这里我们简单地清理测试文件
 
         // 清理测试文件
-        if (std::filesystem::exists("test_configs"))
-        {
+        if (std::filesystem::exists("test_configs")) {
             std::filesystem::remove_all("test_configs");
         }
 
         LoggerManager::getInstance().shutdown();
     }
 
-    void createTestConfigFile()
-    {
+    void createTestConfigFile() {
         std::ofstream file("test_configs/test_config.yaml");
         file << R"(
 # Test Configuration
@@ -108,8 +106,7 @@ mixed_array:
         file.close();
     }
 
-    std::string getTestConfigPath() const
-    {
+    std::string getTestConfigPath() const {
         return "test_configs/test_config.yaml";
     }
 };
@@ -118,8 +115,7 @@ mixed_array:
 // 基础功能测试
 //==============================================================================
 
-TEST_F(ConfigManagerTest, LoadFromFile)
-{
+TEST_F(ConfigManagerTest, LoadFromFile) {
     auto &manager = ConfigManager::getInstance();
     EXPECT_FALSE(manager.isLoaded());
 
@@ -134,8 +130,7 @@ TEST_F(ConfigManagerTest, LoadFromFile)
     EXPECT_TRUE(manager.isLoaded());
 }
 
-TEST_F(ConfigManagerTest, LoadFromString)
-{
+TEST_F(ConfigManagerTest, LoadFromString) {
     auto &manager = ConfigManager::getInstance();
 
     std::string yamlContent = R"(
@@ -159,8 +154,7 @@ test:
 // 配置值访问测试
 //==============================================================================
 
-TEST_F(ConfigManagerTest, GetValueBasicTypes)
-{
+TEST_F(ConfigManagerTest, GetValueBasicTypes) {
     auto &manager = ConfigManager::getInstance();
     ASSERT_EQ(manager.loadFromFile(getTestConfigPath()), radar::SystemErrors::SUCCESS);
 
@@ -188,8 +182,7 @@ TEST_F(ConfigManagerTest, GetValueBasicTypes)
     EXPECT_EQ(deepNumber, 42);
 }
 
-TEST_F(ConfigManagerTest, GetValueWithDefaults)
-{
+TEST_F(ConfigManagerTest, GetValueWithDefaults) {
     auto &manager = ConfigManager::getInstance();
     ASSERT_EQ(manager.loadFromFile(getTestConfigPath()), radar::SystemErrors::SUCCESS);
 
@@ -208,8 +201,7 @@ TEST_F(ConfigManagerTest, GetValueWithDefaults)
     EXPECT_TRUE(nonExistentBool);
 }
 
-TEST_F(ConfigManagerTest, SetValue)
-{
+TEST_F(ConfigManagerTest, SetValue) {
     auto &manager = ConfigManager::getInstance();
     ASSERT_EQ(manager.loadFromFile(getTestConfigPath()), radar::SystemErrors::SUCCESS);
 
@@ -237,8 +229,7 @@ TEST_F(ConfigManagerTest, SetValue)
 // 配置项管理测试
 //==============================================================================
 
-TEST_F(ConfigManagerTest, HasKeyAndRemoveKey)
-{
+TEST_F(ConfigManagerTest, HasKeyAndRemoveKey) {
     auto &manager = ConfigManager::getInstance();
     ASSERT_EQ(manager.loadFromFile(getTestConfigPath()), radar::SystemErrors::SUCCESS);
 
@@ -260,11 +251,10 @@ TEST_F(ConfigManagerTest, HasKeyAndRemoveKey)
     result = manager.removeKey("nested.level1.level2.value");
     EXPECT_EQ(result, radar::SystemErrors::SUCCESS);
     EXPECT_FALSE(manager.hasKey("nested.level1.level2.value"));
-    EXPECT_TRUE(manager.hasKey("nested.level1.level2.number")); // 其他键应该保持
+    EXPECT_TRUE(manager.hasKey("nested.level1.level2.number"));  // 其他键应该保持
 }
 
-TEST_F(ConfigManagerTest, GetSubConfig)
-{
+TEST_F(ConfigManagerTest, GetSubConfig) {
     auto &manager = ConfigManager::getInstance();
     ASSERT_EQ(manager.loadFromFile(getTestConfigPath()), radar::SystemErrors::SUCCESS);
 
@@ -291,8 +281,7 @@ TEST_F(ConfigManagerTest, GetSubConfig)
 // 配置变更通知测试
 //==============================================================================
 
-TEST_F(ConfigManagerTest, ChangeCallbacks)
-{
+TEST_F(ConfigManagerTest, ChangeCallbacks) {
     auto &manager = ConfigManager::getInstance();
     ASSERT_EQ(manager.loadFromFile(getTestConfigPath()), radar::SystemErrors::SUCCESS);
 
@@ -302,8 +291,7 @@ TEST_F(ConfigManagerTest, ChangeCallbacks)
 
     // 注册回调
     auto callbackId = manager.registerChangeCallback(
-        [&](const ConfigChangeEvent &event)
-        {
+        [&](const ConfigChangeEvent &event) {
             callbackCount++;
             lastChangedKey = event.keyPath;
             lastChangeType = event.type;
@@ -329,7 +317,7 @@ TEST_F(ConfigManagerTest, ChangeCallbacks)
 
     // 修改不匹配模式的配置（不应触发回调）
     manager.setValue("data_processor.strategy", "gpu");
-    EXPECT_EQ(callbackCount.load(), 3); // 计数不应增加
+    EXPECT_EQ(callbackCount.load(), 3);  // 计数不应增加
 
     // 取消注册回调
     ErrorCode result = manager.unregisterChangeCallback(callbackId);
@@ -337,50 +325,41 @@ TEST_F(ConfigManagerTest, ChangeCallbacks)
 
     // 修改配置（不应再触发回调）
     manager.setValue("system.max_threads", 25);
-    EXPECT_EQ(callbackCount.load(), 3); // 计数不应增加
+    EXPECT_EQ(callbackCount.load(), 3);  // 计数不应增加
 }
 
 //==============================================================================
 // 简单验证器实现用于测试
 //==============================================================================
 
-class RangeValidator : public IConfigValidator
-{
-public:
+class RangeValidator : public IConfigValidator {
+  public:
     RangeValidator(int min, int max) : min_(min), max_(max) {}
 
-    bool validate(const YAML::Node &value, std::string &errorMessage) const override
-    {
-        try
-        {
+    bool validate(const YAML::Node &value, std::string &errorMessage) const override {
+        try {
             int intValue = value.as<int>();
-            if (intValue < min_ || intValue > max_)
-            {
-                errorMessage = "Value " + std::to_string(intValue) +
-                               " is out of range [" + std::to_string(min_) +
+            if (intValue < min_ || intValue > max_) {
+                errorMessage = "Value " + std::to_string(intValue) + " is out of range [" + std::to_string(min_) +
                                ", " + std::to_string(max_) + "]";
                 return false;
             }
             return true;
-        }
-        catch (const std::exception &e)
-        {
+        } catch (const std::exception &e) {
             errorMessage = "Failed to convert to integer: " + std::string(e.what());
             return false;
         }
     }
 
-    std::string getDescription() const override
-    {
+    std::string getDescription() const override {
         return "Range validator [" + std::to_string(min_) + ", " + std::to_string(max_) + "]";
     }
 
-private:
+  private:
     int min_, max_;
 };
 
-TEST_F(ConfigManagerTest, ConfigValidation)
-{
+TEST_F(ConfigManagerTest, ConfigValidation) {
     auto &manager = ConfigManager::getInstance();
     ASSERT_EQ(manager.loadFromFile(getTestConfigPath()), radar::SystemErrors::SUCCESS);
 
@@ -404,7 +383,7 @@ TEST_F(ConfigManagerTest, ConfigValidation)
     EXPECT_TRUE(errorReport.empty());
 
     // 设置无效值后再验证
-    manager.setValue("system.max_threads", 0); // 这应该通过setValue但验证时失败
+    manager.setValue("system.max_threads", 0);  // 这应该通过setValue但验证时失败
     allValid = manager.validateAll(errorReport);
     // 注意：由于我们在setValue中就进行了验证，这个测试可能需要调整
 }
@@ -413,8 +392,7 @@ TEST_F(ConfigManagerTest, ConfigValidation)
 // 文件操作测试
 //==============================================================================
 
-TEST_F(ConfigManagerTest, SaveAndReload)
-{
+TEST_F(ConfigManagerTest, SaveAndReload) {
     auto &manager = ConfigManager::getInstance();
     ASSERT_EQ(manager.loadFromFile(getTestConfigPath()), radar::SystemErrors::SUCCESS);
 
@@ -434,8 +412,7 @@ TEST_F(ConfigManagerTest, SaveAndReload)
     EXPECT_TRUE(exportedAfterSave.find("saved_value") != std::string::npos);
 }
 
-TEST_F(ConfigManagerTest, ExportToString)
-{
+TEST_F(ConfigManagerTest, ExportToString) {
     auto &manager = ConfigManager::getInstance();
     ASSERT_EQ(manager.loadFromFile(getTestConfigPath()), radar::SystemErrors::SUCCESS);
 
@@ -454,8 +431,7 @@ TEST_F(ConfigManagerTest, ExportToString)
 // 并发安全测试
 //==============================================================================
 
-TEST_F(ConfigManagerTest, ConcurrentAccess)
-{
+TEST_F(ConfigManagerTest, ConcurrentAccess) {
     auto &manager = ConfigManager::getInstance();
     ASSERT_EQ(manager.loadFromFile(getTestConfigPath()), radar::SystemErrors::SUCCESS);
 
@@ -465,10 +441,8 @@ TEST_F(ConfigManagerTest, ConcurrentAccess)
     std::vector<std::thread> threads;
 
     // 启动多个线程进行并发操作
-    for (int t = 0; t < threadCount; ++t)
-    {
-        threads.emplace_back([&manager, &successCount, t, operationsPerThread]()
-                             {
+    for (int t = 0; t < threadCount; ++t) {
+        threads.emplace_back([&manager, &successCount, t, operationsPerThread]() {
             for (int i = 0; i < operationsPerThread; ++i) {
                 try {
                     // 混合读写操作
@@ -490,15 +464,15 @@ TEST_F(ConfigManagerTest, ConcurrentAccess)
                             successCount++;
                         }
                     }
-                } catch (const std::exception& e) {
+                } catch (const std::exception &e) {
                     // 忽略异常，只计算成功次数
                 }
-            } });
+            }
+        });
     }
 
     // 等待所有线程完成
-    for (auto &thread : threads)
-    {
+    for (auto &thread : threads) {
         thread.join();
     }
 
@@ -510,8 +484,7 @@ TEST_F(ConfigManagerTest, ConcurrentAccess)
 // 统计信息测试
 //==============================================================================
 
-TEST_F(ConfigManagerTest, Statistics)
-{
+TEST_F(ConfigManagerTest, Statistics) {
     auto &manager = ConfigManager::getInstance();
     ASSERT_EQ(manager.loadFromFile(getTestConfigPath()), radar::SystemErrors::SUCCESS);
 
@@ -536,8 +509,7 @@ TEST_F(ConfigManagerTest, Statistics)
 // 错误处理测试
 //==============================================================================
 
-TEST_F(ConfigManagerTest, ErrorHandling)
-{
+TEST_F(ConfigManagerTest, ErrorHandling) {
     auto &manager = ConfigManager::getInstance();
 
     // 测试未加载时的操作

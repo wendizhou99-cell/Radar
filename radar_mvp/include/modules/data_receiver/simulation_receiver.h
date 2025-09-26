@@ -4,7 +4,7 @@
  *
  * 定义了模拟数据接收器的类接口，用于生成模拟雷达数据进行测试。
  *
- * @author Kelin
+ * @author Klein
  * @version 1.0
  * @date 2025-09-12
  * @since 1.0
