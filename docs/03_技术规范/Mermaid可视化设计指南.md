@@ -862,10 +862,10 @@
 
     ```mermaid
     ---
-    config:
-      theme: neo
-      flowchart:
-        curve: natural
+      config:
+        theme: base
+        flowchart:
+          curve: basis
     ---
     ```
 
