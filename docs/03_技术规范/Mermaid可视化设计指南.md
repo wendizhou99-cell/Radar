@@ -207,6 +207,107 @@
   - **关系连接**: 使用不同线条样式来表达不同的语义，并可添加标签说明，例如 `NodeA -->|管理| NodeB`。
   - **逻辑分组 (关键)**: 使用 `subgraph "分组名" ... end` 是构建清晰架构图的**最重要技巧**。它能将相关的组件圈在一起，形成逻辑层次或功能单元，极大地增强了图表的可读性。
 
+**🌟 高级技巧：解决复杂图表的三大难题**
+
+本节介绍三个经实践验证的高级技巧，它们能有效解决复杂架构图中的常见设计挑战：
+
+1. **✅ 强烈推荐：可交互的大模块设计**
+
+   **问题场景**：当需要将多个小模块聚合为一个大模块（如"数据处理流水线"），同时希望这个大模块作为整体能参与到更高层次的交互中（如与 TaskScheduler 的管理关系）。
+
+   **解决方案**：使用 `subgraph` 为大模块命名，并给子图赋予一个 ID，这样子图本身就成为了一个可交互的节点。
+
+   ```mermaid
+   flowchart TB
+       subgraph Pipeline["<b>数据处理流水线</b>"]
+           DATA_RECV["数据接收<br/>DataReceiver"]
+           SIGNAL_PROC["信号处理<br/>SignalProcessor"]
+           DATA_PROC["数据处理<br/>DataProcessor"]
+       end
+
+       TASK_ENGINE["<b>TaskScheduler</b><br/>任务调度器"]
+
+       %% Pipeline 作为整体参与交互
+       TASK_ENGINE -- "<b>生命周期管理</b>" --> Pipeline
+
+       classDef pipeline fill:#f0f5ff,stroke:#597ef7,stroke-width:2px
+       class Pipeline pipeline
+   ```
+
+   **优势**：
+   - 大模块既能聚拢内部小模块，又能作为独立实体参与高层交互
+   - 避免了为每个子模块单独绘制连接线的混乱
+   - 清晰展现了"整体-部分"的层次关系
+   - 提升了图表的可读性和语义准确性
+
+2. **便签式注释：利用子图实现 Note 效果**
+
+   **问题场景**：Mermaid 的 `note` 语法在 `flowchart/graph` 中不被支持，但有时需要为特定节点添加重要说明。
+
+   **解决方案**：创建一个包含说明文字的子图，并为其应用便签样式（黄色背景）。
+
+   ```mermaid
+   flowchart TB
+       subgraph ClientNote["<b>显控终端</b>（独立进程）"]
+           CLIENT["<b>物理隔离说明</b><br/>CLIENT与Pipeline处于不同进程<br/>通过UDP/REST跨网络通信"]
+       end
+
+       GATEWAY["数据网关<br/>DisplayController"]
+       GATEWAY == "<b>数据流 (UDP)</b>" ==> ClientNote
+
+       %% 便签样式：黄色背景，虚线边框
+       classDef note fill:#fffbe6,stroke:#d4b106,stroke-width:2px,stroke-dasharray: 5 5
+       class ClientNote,CLIENT note
+   ```
+
+   **优势**：
+   - 提供了类似便签的视觉效果
+   - 黄色背景使注释信息醒目但不突兀
+   - 说明文字可以很长，适合复杂的补充说明
+
+3. **隐形锚点：解决连接线遮挡问题**
+
+   **问题场景**：当多个模块需要连接到同一个核心组件（如 EventBus）时，直接连接会导致线条重叠、交叉，难以辨认。
+
+   **解决方案**：引入一个不可见的"锚点节点"作为中转站，先将所有模块连接到锚点，再由锚点连接到目标组件。
+
+   ```mermaid
+   flowchart TB
+       subgraph Pipeline["数据处理流水线"]
+           DATA_RECV["DataReceiver"]
+           SIGNAL_PROC["SignalProcessor"]
+       end
+
+       EVENTBUS["<b>EventBus</b><br/>事件总线"]
+
+       %% 引入不可见的锚点节点
+       EVENTBUS_ANCHOR[ ]:::invisible
+
+       %% 模块连接到锚点（无标签）
+       Pipeline -.- EVENTBUS_ANCHOR
+
+       %% 锚点连接到 EventBus（带标签）
+       EVENTBUS_ANCHOR -.-> |"<i>发布/订阅</i>"| EVENTBUS
+
+       %% 定义不可见样式
+       classDef invisible fill:transparent,stroke:transparent,height:1px,width:1px
+       classDef eventbus fill:#fffbe6,stroke:#d4b106,stroke-width:3px
+
+       class EVENTBUS_ANCHOR invisible
+       class EVENTBUS eventbus
+   ```
+
+   **优势**：
+   - 有效避免了连接线的交叉和遮挡
+   - 保持了图表的整洁性和可读性
+   - 锚点完全透明，不会引入视觉噪音
+   - 适用于任何"多对一"的连接场景
+
+**最佳实践建议**：
+- **技巧1（可交互大模块）** 是最推荐的设计模式，应优先考虑使用
+- 三个技巧可以组合使用，以应对更复杂的架构表达需求
+- 始终保持图表的语义清晰性，不要为了技巧而技巧
+
 #### 3.1.3 项目案例：核心处理服务器内部分层架构
 
   - **场景描述**: 下图源自 **[`99_模块集成策略.md`](../01_项目设计/02_模块设计/99_模块集成策略.md)**，它精确地描绘了核心处理服务器内部各个组件的逻辑分层和它们之间的静态依赖关系。这是一个优秀的 `graph` 应用案例，因为它清晰地展示了系统的静态组成。
